@@ -1,0 +1,633 @@
+<template>
+	<view v-if="static===false" ref="card" class="card" :style="cardStyle" :elevation="elevation" @touchmove="touchmove"
+		@touchstart="touchstart" @touchend="touchend" @longpress="longpress">
+
+		<view class="content" :style="{width:widApp}" @click="into_app">
+			<u--image :src="imageSrc === undefined ? defaultImg : imageSrc" shape="circle" width="100rpx"
+				height="100rpx" />
+			<u--text margin="20rpx 0 0 0" :text="text" align="center" size="26" :lines="text.length > 5 ? 1 : false"
+				:color="color" />
+		</view>
+
+	</view>
+	<view v-else ref="card" class="card" :style="cardStyle">
+		<view class="content" :style="{width:widApp}">
+			<u--image :src="defaultImg" shape="circle" width="100rpx" height="100rpx" />
+			<u--text margin="20rpx 0 0 0" :text="text" align="center" size="26" :lines="text.length > 5 ? 1 : false"
+				:color="color" />
+		</view>
+
+	</view>
+</template>
+
+<script>
+	const dom = uni.requireNativePlugin('dom')
+	// 卡片操作浮动窗口
+	import CardOperation from "@/components/card-operation/card-operation"
+	// animation模块可以用来在组件上执行动画
+	const animation = uni.requireNativePlugin('animation');
+	const bindingx = uni.requireNativePlugin('bindingx');
+	export default {
+		name: "app-quick-need",
+		components: {
+			CardOperation
+		},
+		props: {
+			pageHeight: {
+				type: [Number]
+			},
+			// 主页面所有卡片的rect，支持动态更新
+			rectList: {
+				type: [Array]
+			},
+			maskShow: {
+				type: [Boolean]
+			},
+			id: {
+				type: [String]
+			},
+			activeCardId: {
+				type: [String]
+			},
+			imageSrc: {
+				type: [String, Number],
+				require: true
+			},
+			text: {
+				type: String,
+				default: ''
+			},
+			// 宽度
+			widApp: {
+				type: String,
+				default: '135rpx'
+			},
+			// 是否允许拖拽
+			allowDrag: {
+				type: Boolean,
+				default: true
+			},
+			// 是否为静态组件
+			static: {
+				type: Boolean,
+				default: false
+			},
+			// 当前应用的信息
+			itemData: {
+				type: [Object, Array],
+				default: {}
+			},
+			color: {
+				type: [String],
+				default: "black"
+			},
+			removeData: {
+				type: Object,
+				default: {}
+			},
+			dragAppRendering: {
+				type: Boolean,
+				default: false
+			},
+			dragLayoutRect: {
+				type: Object,
+				default: {}
+			}
+		},
+		data() {
+			return {
+				dragY: 0,
+				dragX: 0,
+				isTouchmove: false, //是否开始触摸移动
+				touchstartX: 0, //触摸时的x轴坐标
+				touchstartY: 0, //触摸时的y轴坐标
+				touchstartTime: 0, //点按的时间戳
+				isLongpress: false, //是否长按
+				init: false, //是否初始化完毕
+				transition: false, //是否开启动画
+				elevation: '0px', //卡片的阴影大小 可以修改view的显示层级，同浏览器端的z-index
+				isCardCoincidence: false, //卡片是否重合
+				//卡片view的边框信息，包括高度、宽度、top、left、bootom、right
+				rect: {
+					top: 0,
+					left: 0,
+					right: 0,
+					bottom: 0,
+					width: 0, //卡片宽度 px
+					height: 0, //卡片高度 px
+				},
+				main_binding: null,
+				coincidenceRECT: null, // 重合卡片的rect
+				isHandleCoincidence: false, // 是否正在计算重合、相交
+				initStyle: {},
+				defaultImg: '/static/application_image/quick_block.png', // 默认快捷入口图标
+				eventName: "",
+			};
+		},
+		computed: {
+			cardStyle() {
+				if (this.init) {
+					return {
+						position: "absolute",
+						top: this.dragY + 'px',
+						left: this.dragX + 'px',
+						width: this.widApp
+					}
+				} else {
+					return {
+						width: this.widApp
+					}
+				}
+			}
+		},
+		watch: {
+			maskShow(val, oldVal) {
+				if (val === false) {
+					this.elevation = "0px"
+				}
+			},
+			dragAppRendering(val, oldVal) {
+				if (val === true) {
+					this.initCardOffset()
+				} else {
+					this.init = false;
+				}
+			},
+			removeData(val, oldVal) {
+				if (JSON.stringify(val) != "{}" && this.maskShow === false) {
+					let index = this.rectList.findIndex(v => v.id == this.removeData.appId);
+					let list = this.rectList.filter((e, key) => {
+						return key > index
+					});
+					if (this.static === true) {
+						list.push({
+							id: this.id,
+							rect: this.rect
+						})
+						console.log(list);
+						// 静态加号
+						// 当前组件前移一位
+						list.forEach((item, key) => {
+							let data = {}
+							if (key == 0) {
+								data = {
+									id: item.id,
+									x: this.removeData.rect.left,
+									y: this.removeData.rect.top
+								}
+							} else {
+								data = {
+									id: item.id,
+									x: list[key - 1].rect.left,
+									y: list[key - 1].rect.top
+								}
+							}
+							const res = {
+								type: "setCardCoordinate",
+								data: data,
+								flag: true
+							}
+							// console.log(uni.dayjs().valueOf())
+							uni.$emit("watchCardAndParentCommunication" + item.id, res)
+						})
+					}
+				}
+			}
+		},
+		created() {
+			this.eventName = "watchCardAndParentCommunication" + this.id;
+			// console.log("card " + this.id + " created")
+			// 监听主页面和其他卡片触发的事件
+			uni.$on(this.eventName, (res) => {
+				if (res.type == "setCardCoordinate" && res.data.id == this.id) {
+					// translate 偏移量
+					console.log(3333)
+					let tx = (this.rect.left > res.data.x ? -(this.rect.left - res.data.x) : res.data.x - this
+						.rect
+						.left)-this.dragLayoutRect.left;
+					let ty = this.rect.top > res.data.y ? -(this.rect.top - res.data.y) : res.data.y - this
+						.rect
+						.top;
+						
+					// ty = ty - this.dragLayoutRect.top;
+					let card = this.$refs.card;
+					// 动画偏移
+					// console.log(tx,ty)
+					animation.transition(card, {
+						needLayout: false,
+						transformOrigin: 'center center',
+						styles: {
+							transform: "translate(" + tx + "px," + ty + "px)"
+						},
+						duration: 200, //ms
+						timingFunction: 'linear',
+						delay: 0 //ms
+					}, () => {
+						// 更新卡片坐标
+						this.dragX = res.data.x-this.dragLayoutRect.left;
+						this.dragY = res.data.y-this.dragLayoutRect.top;
+						this.rect.left = res.data.x;
+						this.rect.top = res.data.y;
+						
+						// 动画偏移为0
+
+						animation.transition(card, {
+							needLayout: false,
+							transformOrigin: 'center center',
+							styles: {
+								transform: "translate(" + 0 + "px," + 0 + "px)"
+							},
+							duration: 10, //ms
+							timingFunction: 'linear',
+							delay: 0 //ms
+						}, () => {
+							if (res.hasOwnProperty("flag") === false) {
+								uni.$emit("watchCardLongpress_1", {
+									type: "synchronization_rect",
+									rect: this.rect,
+									cardId: this.id
+								});
+							}
+						})
+					})
+				} else if (res.type == "resetElevation" && res.id == this.id) {
+					this.elevation = "0px";
+					this.isLongpress = false;
+				}
+			})
+		},
+		mounted() {
+			// console.log('app quick need mounted')
+		},
+		updated() {},
+		beforeDestroy() {
+			uni.$off(this.eventName)
+		},
+		methods: {
+			into_app() {
+				// console.log(this.isLongpress)
+				if (this.isLongpress === false) {
+					setTimeout(() => {
+						this.$emit('into_app')
+					}, 50)
+				}
+			},
+			throwCardOffset() {
+				uni.$emit(this.initCardOffset)
+			},
+			// 卡片偏移量初始化
+			initCardOffset() {
+				// 解决getComponentRect 获取某个元素 View 的外框 得到的数据不准确
+				dom.getComponentRect(this.$refs.card, option => {
+					console.log(this.dragLayoutRect.top)
+					console.log("卡片偏移量初始化", option.size.top + " , " + "id:" + this.id)
+					this.dragX = option.size.left - this.dragLayoutRect.left;
+					this.dragY = option.size.top - this.dragLayoutRect.top;
+					this.rect = option.size;
+					this.init = true;
+					// 同步卡片的rect main_activity
+					// console.log(this.id)
+					if (this.static === false) {
+						uni.$emit("watchCardLongpress_1", {
+							type: "synchronization_rect",
+							rect: option.size,
+							id: this.id
+						});
+					}
+
+				})
+			},
+			getEl(el) {
+				if (typeof el === 'string' || typeof el === 'number') return el;
+				if (WXEnvironment) {
+					return el.ref;
+				} else {
+					return el instanceof HTMLElement ? el : el.$el;
+				}
+			},
+			// 触摸开始
+			touchstart(event) {
+				// console.log("触摸开始时间：",uni.dayjs().valueOf())
+				// console.log(this.isLongpress)
+				if (this.isLongpress === true) {
+					this.elevation = "0px";
+					console.log("触摸卡片，关闭遮罩层！")
+					setTimeout(() => {
+						this.isLongpress = false
+					}, 200)
+					uni.$emit("watchCardLongpress_1", {
+						type: "close_remove_popup",
+						maskShow: false,
+						rect: this.rect,
+						cardId: this.id,
+						cardData: this.itemData
+					})
+
+				} else {
+					console.log("记录触摸点的rect、触发时间")
+					// 初始化触摸点的X,Y
+					this.touchstartX = event.touches[0].screenX;
+					this.touchstartY = event.touches[0].screenY;
+					// 触摸起始点时间戳
+					this.touchstartTime = uni.dayjs().valueOf();
+				}
+			},
+			// 长按
+			longpress(event) {
+				// 长按结束和触摸开始间隔 490-500 ms
+				// 弹出操作卡片、显示蒙版层
+				// 提升卡片层级
+				this.isLongpress = true;
+				this.elevation = "0.1px";
+				// 卡片长按弹出删除框
+				uni.$emit('watchCardLongpress_1', {
+					type: "open_remove_popup",
+					maskShow: true,
+					rect: this.rect,
+					cardId: this.id,
+					cardData: {
+						...this.itemData,
+						rect: this.rect
+					},
+				})
+
+				// 绑定表达式
+				let card = this.getEl(this.$refs.card);
+				if (this.main_binding == null) {
+					console.log("为卡片绑定pan表达式")
+					// this.main_binding = bindingx.prepare({anchor:card,eventType:"pan"});
+					// return
+					this.main_binding = bindingx.bind({
+						anchor: card,
+						eventType: 'pan',
+						props: [{
+								element: card,
+								property: 'transform.translateX',
+								expression: 'x+0'
+
+							},
+							{
+								element: card,
+								property: 'transform.translateY',
+								expression: "y+0"
+							},
+						]
+					}, (res) => {
+						if (res.state === 'exit') {
+							// console.log("card bindingx pan exit")
+						} else if (res.state === "start") {
+							// 卡片拖拽开始
+							// res.deltaX 、res.deltaY 为相对位置，相对于 this.rect.left，this.rect.top
+							// console.log(res)
+						} else if (res.state === "end") {
+							// 卡片拖拽结束
+							// res.deltaX 、res.deltaY 为相对位置，相对于 this.rect.left，this.rect.top
+						}
+					});
+				}
+			},
+			// 监听触摸移动 native -> js 通信
+			touchmove(event) {
+				// 执行间隔 10ms - n
+				// const touches = event.touches[0];
+				// console.log(uni.dayjs().valueOf())
+				if (this.isLongpress === true && uni.dayjs().valueOf() - this.touchstartTime >= 600) {
+					if (this.calculationMoveDistance(event.touches[0]) > 3 && this.isHandleCoincidence === false) {
+						uni.$emit('watchCardLongpress_1', {
+							type: 'card_start_touchmove',
+							maskShow: false
+						})
+						this.isHandleCoincidence = true;
+						// 获取当前卡片实时rect
+						dom.getComponentRect(this.$refs.card, option => {
+							let l = 0;
+							if (Math.abs(option.size.left - this.rect.left) > 0) {
+								l = Math.abs(option.size.left - this.rect.left);
+							}
+							if (Math.abs(option.size.top - this.rect.top) > 0) {
+								l = Math.abs(option.size.top - this.rect.top);
+							}
+							if (true) {
+								if (!this.isTouchmove) {
+									this.isTouchmove = true
+								}
+								let dragX = option.size.left;
+								let dragY = option.size.top;
+								// 校验当前卡片的坐标是否与其他卡片重合
+								this.checkCoordinateCoincidence(dragX, dragY, this.rectList).then(res => {
+									// 获取和当前卡片相交的数组
+									let flag = false;
+									res.forEach((item, key) => {
+										// 相交且重合
+										if (item.intersect && item.coincidence) {
+											flag = true;
+											this.isCardCoincidence = true;
+											// 1.替换目标卡片的rect
+											const data = {
+												x: this.rect.left,
+												y: this.rect.top,
+												id: item.id
+											}
+											this.rect.left = item.rect.left;
+											this.rect.top = item.rect.top;
+											// 通知主页面修改card rect
+											uni.$emit("watchCardLongpress_1", {
+												type: "synchronization_rect",
+												rect: this.rect,
+												cardId: this.id
+											});
+											// 异步
+											console.log(data)
+											uni.$emit("watchCardAndParentCommunication" + item.id, {
+													type: "setCardCoordinate",
+													data: data
+												})
+										}
+									})
+									if (!flag) {
+										this.isHandleCoincidence = false;
+										// console.log("没有检测到碰撞");
+									} else {
+										// 延迟15ms
+										setTimeout(() => {
+											this.isHandleCoincidence = false;
+										}, 320)
+										console.log("检测到碰撞");
+									}
+								}).catch(err => {
+									this.isHandleCoincidence = false;
+									// console.log("没有检测到碰撞");
+								}).finally(res => {})
+								// console.log("计算处理后的时间：",uni.dayjs().valueOf())
+							}
+						})
+					} else {
+
+					}
+				}
+			},
+			// 触摸结束
+			touchend() {
+				// console.log('touch end')
+				this.touches = false;
+				this.touchstartX = 0;
+				this.touchstartY = 0;
+				if (this.main_binding != null) {
+					// 解除卡片pan表达式绑定
+					bindingx.unbind({
+						token: this.main_binding.token,
+						eventType: 'pan'
+					});
+					this.main_binding = null;
+				}
+				if (this.isTouchmove === true) {
+					setTimeout(() => {
+						this.isLongpress = false;
+					}, 200)
+					this.isTouchmove = false;
+					if (this.isCardCoincidence === true) {
+						// 1.卡片过渡到替换的位置
+						const card = this.$refs.card;
+						const targetX = this.rect.left;
+						const targetY = this.rect.top;
+						this.dragX = this.rect.left - this.dragLayoutRect.left;
+						this.dragY = this.rect.top - this.dragLayoutRect.top;
+						animation.transition(card, {
+							needLayout: true,
+							transformOrigin: 'center center',
+							styles: {
+								transform: "translate(" + 0 + "px," + 0 + "px)"
+							},
+							duration: 5, //ms
+							timingFunction: 'linear',
+							delay: 0 //ms
+						}, () => {
+							// 降低卡片层级
+							this.elevation = "0px";
+							uni.$emit("watchCardLongpress_1", {
+								type: "synchronization_rect",
+								rect: this.rect,
+								cardId: this.id,
+							});
+							this.isCardCoincidence = false;
+						})
+					} else {
+						// 卡片返回原位
+						let card = this.$refs.card;
+						this.dragX = this.rect.left;
+						this.dragY = this.rect.top;
+						// 降低卡片层级
+						this.elevation = "0px";
+						animation.transition(card, {
+							needLayout: true,
+							transformOrigin: 'center center',
+							styles: {
+								transform: "translate(" + 0 + "px," + 0 + "px)"
+							},
+							duration: 300, //ms
+							timingFunction: 'linear',
+							delay: 0 //ms
+						}, () => {})
+					}
+				}
+			},
+			// 校验当前卡片的坐标是否与其他卡片重合
+			checkCoordinateCoincidence(dragX, dragY, rectList) {
+				return new Promise((resolve, reject) => {
+					// 重合的卡片数组
+					let cList = [];
+					// 重合计算
+					rectList.forEach((item, key) => {
+						// 排除拖拽的卡片
+						let a = {
+							left: dragX,
+							top: dragY,
+							width: this.rect.width,
+							height: this.rect.height
+						}
+						let res = this.hitTest(a, item.rect)
+						if (this.id != item.id && res.intersect) {
+							cList.push({
+								...item,
+								...res
+							});
+						}
+					})
+					if (cList.length > 0) {
+						resolve(cList)
+					} else {
+						reject()
+					}
+				})
+			},
+			/**
+			 * 卡片重合检测
+			 * 算法逻辑：判断两个卡片的任意一边是否有间距
+			 * source:拖拽卡片{top,left,width,height}
+			 * target:目标卡片{top,left,width,height}
+			 * */
+			hitTest(source, target) {
+				let intersect = false; //是否相交
+				let coincidence = false; //是否重合
+				let direction = ""; //拖拽卡片相对于目标卡片的方向
+				if (source.left + source.width < target.left || source.top + source.height < target.top ||
+					source.left > target.left + target.width || source.top > target.top + target.height) {
+					intersect = false;
+				} else {
+					intersect = true;
+					// 方向
+					if (this.rect.left < target.left) {
+						direction = "left";
+						if (source.left > target.left) {
+							coincidence = true
+						}
+					} else if (this.rect.left > target.left) {
+						direction = "right";
+						if (source.left < target.left) {
+							coincidence = true
+						}
+					}
+					if (this.rect.top < target.top) {
+						direction = "top";
+						if (source.top > target.top) {
+							coincidence = true
+						}
+					} else if (this.rect.top > target.top) {
+						direction = "bottom";
+						if (source.top < target.top) {
+							coincidence = true
+						}
+					}
+				}
+				return {
+					intersect: intersect,
+					direction: direction,
+					coincidence: coincidence
+				}
+			},
+			// 计算卡片移动距离
+			calculationMoveDistance(touches) {
+				const lx = Math.abs(touches.screenX - this.touchstartX);
+				const ly = Math.abs(touches.screenY - this.touchstartY);
+				if (lx > 0 && lx > ly) {
+					return lx
+				} else if (ly > 0 && ly > lx) {
+					return ly
+				}
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.card {
+		padding: 0 0 0 15rpx;
+		margin: 0 0 30rpx 0;
+		// background-color: red;
+	}
+
+	.content {
+		align-items: center;
+		justify-content: center;
+	}
+</style>

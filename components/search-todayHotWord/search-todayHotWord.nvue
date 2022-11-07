@@ -1,0 +1,122 @@
+<template>
+	<view class="main">
+		<view
+			class="top-left"
+		>
+			<u--image
+				:src="img"
+				width="43rpx"
+				height="43rpx"
+				class="hot-style"
+			/>
+			<u--text
+				text="今日热搜词"
+				bold
+				size="34"
+				margin="0 0 0 12rpx"
+			/>
+		</view>
+		<view
+			v-if="hotword.length === 0"
+			class="not-content"
+		>
+			<u--image
+				:src="img1"
+				width="360rpx"
+				height="360rpx"
+			/>
+			<u--text
+				text="今日暂无热搜词~"
+				size="26"
+				color="#999"
+			/>
+		</view>
+		<list
+			v-else
+			class="content"
+		>
+			<cell
+				v-for="(item, index) in hotword"
+				class="content__in"
+				@click="search_hot_word(item.words)"
+			>
+				<text
+					:style="{ color: index === 0 ? '#F00' : index === 1 ? '#F70' : index === 2 ? '#FFC400' : '#666'}"
+					class="ranking"
+				>
+					{{index + 1}}
+				</text>
+				<text
+					class="rankingword"
+				>
+					{{item.words}}
+				</text>
+			</cell>
+		</list>
+	</view>
+</template>
+
+<script>
+	import { hotWord } from '@/api/application.js'
+	
+	export default {
+		name:"todayHotWord",
+		data() {
+			return {
+				hascontent: true,
+				img: require('@/static/search_image/hot.png'),
+				img1: require('@/static/search_image/nothotword.png'),
+				hotword: []
+			}
+		},
+		methods:{
+			search_hot_word(word){
+				this.$emit('searchHotWord', word)
+			}
+		},
+		mounted(){
+			hotWord({ type:1 }).then(res => {
+				this.hotword = res.data.data.nameCountVo.list.filter(item => item.words !== '')
+			})
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.main{
+	position: relative;
+	width: 690rpx;
+	height: 1100rpx;
+	padding: 30rpx 30rpx 0 30rpx;
+	background-color: #fff;
+	border-radius: 30rpx;
+	
+	.top-left{
+		width: 233rpx;
+		height: 47rpx;
+		flex-direction: row;
+	}
+	.not-content{
+		padding: 180rpx 0 0 0;
+		align-items: center;
+	}
+	.content{
+		padding: 60rpx 0 0 0;
+		
+		.content__in{
+			flex-direction: row;
+			padding: 0 0 42rpx 0;
+			
+			.ranking{
+				font-size: 36rpx;
+				width: 60rpx;
+				
+			}
+			.rankingword{
+				color: #333;
+				font-size: 30rpx;
+			}
+		}
+	}
+}
+</style>

@@ -1,0 +1,79 @@
+<template>
+	<view class="box" :style="outstyle" ref="box">
+		<text :style="{color:color}" class="box_title">{{title}}</text>
+		<text :style="{color:color}" v-if="title === '最近使用'" class="box_tip">长按可添加至快捷入口</text>
+	</view>
+</template>
+
+<script>
+const dom = uni.requireNativePlugin('dom')
+export default {
+	name:"app-quick",
+	props:{
+		title:{
+			type:[String],
+			default:''
+		},
+		pageHeight:{
+			type: [Number]
+		},
+		color:{
+			type:[String],
+			default:"black"
+		}
+	},
+	data(){
+		return {
+			x: 0,
+			y: 0,
+			init: false
+		}
+	},
+	watch: {
+		pageHeight(newVal, oldVal) {
+			if (newVal > 0) {
+				// this.init = true
+				// dom.getComponentRect(this.$refs.box, option => {
+				// 	console.log(option)
+				// 	this.x = option.size.left;
+				// 	this.y = option.size.top;
+				// 	// this.init = true
+				// })
+			}
+		},
+	},
+	computed:{
+		outstyle(){
+			if( this.init === true ){
+				return {
+					position: "absolute",
+					top: this.y + 'px',
+					left: this.x + 'px'
+				}
+			}
+		}
+	},
+	mounted(){
+	}
+}
+</script>
+
+<style lang="scss" scoped>
+.box{
+	width: 680rpx;
+	flex-direction: row;
+	justify-content: space-between;
+	
+	.box_title{
+		font-size: 34rpx;
+		font-weight: bold;
+		color: #333;
+		padding: 0 0 32rpx 0;
+	}
+	
+	.box_tip{
+		font-size: 26rpx;
+		color: #666;
+	}
+}
+</style>

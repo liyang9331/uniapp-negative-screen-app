@@ -1,0 +1,128 @@
+<template>
+	<view v-if="historyItem.length > 0" class="main">
+		<u--text
+			class="top-left"
+			text="搜索历史"
+			bold
+			size="34"
+		/>
+		<u-icon
+			class="top-right"
+			size="54"
+			name="trash"
+			@click="clearSearchHistory"
+		/>
+		<view
+			class="bottom"
+		>
+			<text
+				v-for="(item, index) in historyItem"
+				class="customStyle"
+				@click="sendHistoryWord(item)"
+			>
+				{{item | filter_searchWord}}
+			</text>
+		</view>
+<!-- 		<view v-else class="bottom-not-center">
+			<u--text text="暂无历史搜索记录"></u--text>
+		</view> -->
+	</view>
+</template>
+<script>
+	const storage = uni.requireNativePlugin('storage')
+	export default {
+		name:"search-history",
+		props: {
+			searchHistoryWord: {
+				type: String
+			}
+		},
+		filters:{
+			filter_searchWord(value){
+				try{
+					return value.length > 9 ? value.slice(0,9) + '...' : value
+				}catch(e){
+					return value
+				}
+			}
+		},
+		data() {
+			return {
+				historyItem:[]
+			}
+		},
+		methods:{
+			// 获取搜索历史记录
+			clearSearchHistory(){
+				storage.removeItem('searchHistoryWord', callBack => {
+					// console.log(callBack.result)
+					this.historyItem = []
+				})
+			},
+			// 点击历史记录触发搜索
+			sendHistoryWord(value){
+				this.$emit('sendHistoryWord', value)
+			}
+		},
+		mounted(){
+			storage.getItem('searchHistoryWord', callBack => {
+				try{
+					this.historyItem = JSON.parse(callBack.data)
+				}catch(e){
+					//TODO handle the exception
+				}
+			})
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.main{
+	position: relative;
+	width: 690rpx;
+	height: 214rpx;
+	margin-bottom: 40rpx;
+	flex-direction: row;
+	
+	.top-left{
+		position: absolute;
+		top: 0;
+		left: 0;
+	}
+	.top-right{
+		position: absolute;
+		top: 0;
+		right: 0;
+	}
+	.bottom{
+		position: absolute;
+		flex-direction: row;
+		flex-wrap: wrap;
+		left: 0;
+		bottom: 0;
+		width: 690rpx;
+		height: 136rpx;
+		
+		.customStyle{
+			height: 53rpx;
+			padding: 0 20rpx;
+			margin: 0 22rpx 30rpx 0;
+			color: #333;
+			font-size: 26rpx;
+			line-height: 53rpx;
+			border-radius: 30rpx;
+			overflow: hidden;
+			text-align: center;
+			background-color: #ECECEC;
+		}
+	}
+	// .bottom-not-center{
+	// 	position: absolute;
+	// 	top: 30rpx;
+	// 	left: 100%;
+	// 	width: 200rpx;
+	// 	height: 100rpx;
+	// 	background-color: pink;
+	// }
+}
+</style>

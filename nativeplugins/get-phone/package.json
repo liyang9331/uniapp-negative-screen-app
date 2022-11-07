@@ -1,0 +1,40 @@
+{
+    "name": "GetPhone",
+    "id": "Get-Phone",
+    "version": "1.0",
+    "description": "获取软件仓库的手机号",
+    "_dp_type":"nativeplugin",
+    "_dp_nativeplugin":{
+        "android": {
+            "plugins": [
+                {
+                    "type": "module",
+                    "name": "Get-Phone",
+                    "class": "com.example.get_phone.GetPhone"
+                }
+            ],
+            "hooksClass": "",
+            "integrateType": "aar",
+            "dependencies": [""],
+            "excludeDependencies": [],
+            "compileOptions": {
+                "sourceCompatibility": "1.8",
+                "targetCompatibility": "1.8"
+            },
+            "abis": [
+                "armeabi-v7a","arm64-v8a","x86"
+            ],
+            "minSdkVersion": "21",
+            "useAndroidX": false,
+            "permissions": [],
+            "parameters": {
+                "android_appid": {
+                    "des": "请填写appid",
+                    "key": "",
+                    "placeholder": ""
+                }
+            }
+        }
+        
+    }
+}

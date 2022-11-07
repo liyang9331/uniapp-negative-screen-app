@@ -1,0 +1,114 @@
+<template>
+	<!-- 测试nvue原生页面-》position：fixed定位 elevation属性 布局顺序影响层级的优先级-->
+	<!-- 首页最小化模型-测试 -->
+	
+	<!-- 背景图片 -->
+	<image :src="getBackgroundImageUrl" class="wallpaper"></image>
+	<!-- 内容区域 -->
+	<scroll-view :scroll-y="scroll" class="content">
+		<!-- 卡片 -->
+		<view @longpress="longpress($event,key)" v-for="(item,key) in list" :key="key" 
+		:elevation="key==activeIndex?'0.4px':'0px'" class="card flex-c"></view>
+		<!-- 遮罩 -->
+		<view class="mask-layer" v-if="maskShow" :elevation="elevationMaskLayer"></view>
+	</scroll-view>
+</template>
+
+<script>
+	export default {
+		components: {},
+		data() {
+			return {
+				elevationMaskLayer: "0.3px",
+				maskShow:false,
+				scroll:true,
+				list:new Array(10),
+				activeIndex:-1,
+			}
+		},
+		computed: {
+			getBackgroundImageUrl() {
+				return uni.$store.state.backgroundImageUrl
+			},
+		},
+		watch: {},
+		onLoad() {
+			// 		"width": 393,
+			// "height": 828
+			// console.log(uni.$store.state.systemInfo)
+			// setTimeout(() => {
+			// 	this.elevation1 = "0.4px";
+			// 	console.log(this.elevation1);
+			// 	// this.scroll= false;
+			// }, 5000)
+		},
+		onReady() {
+
+		},
+		onResize() {},
+		onUnload() {
+
+		},
+		methods: {
+			longpress(event,key){
+				this.maskShow = true;
+				this.scroll = false;
+				this.activeIndex = key;
+				this.elevationMaskLayer = "0.3px"
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.flex-c {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.wallpaper {
+		width: 750rpx;
+		height: 1900rpx;
+		position: fixed;
+		// background-color: goldenrod;
+	}
+	.content{
+		position: fixed;
+		width: 750rpx;
+		height: 1800px;
+		display: flex;
+		flex-direction: row;
+		flex-wrap: wrap;
+		justify-content: space-around;
+	}
+	.elevation {
+		width: 750rpx;
+		height: 800rpx;
+		background-color: green;
+		// position: absolute;
+	}
+	.card{
+		width: 330rpx;
+		height: 330rpx;
+		background-color: #fff;
+		border-radius: 20rpx;
+		margin: 20rpx 0;
+	}
+
+	.layout {
+		position: absolute;
+		width: 750rpx;
+		height: 850rpx;
+		background-color: blue;
+	}
+	
+	.mask-layer {
+		background-color: rgba(0, 0, 0, 0.5);
+		position: absolute;
+		width: 393px;
+		height: 898px;
+		top: 0;
+		left: 0;
+	}
+</style>

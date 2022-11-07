@@ -1,0 +1,93 @@
+<template>
+	<view class="page">
+		<view :style="{height: statusBarHeight + 'px', width: '680rpx'}"></view>
+		<searchBar :needComponents="['arr','text']" title="信息详情" @goBack="goBack" />
+		<view class="detail">
+			<view class="box">
+				<u--image :src="infoDetailData.appLogoPic" width="70rpx" height="70rpx"/>
+				<u--text :text="infoDetailData.appName" class="box__title" size="32" lineHeight="70rpx" color="#333"/>
+				<u--text :text="infoDetailData.pushTime" size="26" lineHeight="70rpx" color="#666"/>
+			</view>
+			<u--text :text="infoDetailData.notifyName" size="34" bold :lines="3" margin="120rpx 0 0 0" />
+			<text class="content">{{ infoDetailData.eventContent }}</text>
+		</view>
+		<u-button v-if="infoDetailData.notifyType === 2" text="去应用看看" type="primary" shape="circle" class="custom-style" @click="into_app(infoDetailData.appPackage,infoDetailData.jumpPath)"/>
+	</view>
+</template>
+
+<script>
+	import applet from '@/mixins/applet-compatibility'
+	import searchBar from '@/components/search-bar/search-bar'
+	import { launchApplication, openURL } from '@/utils/nativeAPI.js'
+	export default {
+		components: { searchBar },
+		mixins: [applet],
+		data() {
+			return {
+				infoDetailData:{
+					appName: ''
+				}
+			}
+		},
+		onLoad(){
+			uni.$on('information', data => {
+				this.infoDetailData = data.data
+			})
+		},
+		onUnload(){
+			uni.$off('information')
+		},
+		methods:{
+			goBack(){
+				uni.navigateBack({
+					delta:1
+				})
+			},
+			into_app(pname, jumpPath){
+				openURL(jumpPath,()=>{
+					launchApplication(pname, {}, ()=>{})
+				},pname)
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.page{
+	padding: 0 30rpx 0 30rpx;
+	
+	.detail{
+		position: relative;
+		width: 690rpx;
+		border-radius: 30rpx;
+		background-color: #fff;
+		padding: 30rpx 30rpx 60rpx 30rpx;
+		margin: 0 0 5rpx 0;
+		box-shadow: 1rpx 2rpx 2rpx rgba(0, 0, 0, .1);
+		
+		.box{
+			position: absolute;
+			flex-direction: row;
+			margin: 0 0 50rpx 0;
+			
+			.box__title{
+				padding: 0 25rpx;
+			}
+		}
+		
+		.content{
+			padding-top: 35rpx;
+			font-size: 28rpx;
+			color: #666;
+		}
+	}
+	
+	.custom-style{
+		position: fixed;
+		left: 25rpx;
+		bottom: 70rpx;
+		width: 580rpx;
+		margin-left: 55rpx;
+	}
+}
+</style>

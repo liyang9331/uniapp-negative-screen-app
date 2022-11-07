@@ -1,0 +1,136 @@
+<template>
+	<list class="page" show-scrollbar="false">
+		<header>
+			<view :style="{height: statusBarHeight + 'px', width: '690rpx', backgroundColor: '#f4f4f5'}"></view>
+			<searchBar :needComponents="['arr','text']" @goBack="goBack" :setStyle="{ backgroundColor: '#f4f4f5' }" />
+		</header>
+		<cell v-for="(item, index) in informationData" :key="index" :recycle="false">
+			<informationItem :itemInfo="item"/>
+		</cell>
+		<loading @loading="onloading" :display="loadinging ? 'show' : 'hide'">
+			<u-loadmore
+				:status="status"
+				:loading-text="loadingText"
+				:loadmore-text="loadmoreText"
+				:nomore-text="nomoreText"
+				fontSize="30rpx"
+				iconSize="33rpx"
+				:icon="true"
+			/>
+		</loading>
+	</list>
+</template>
+
+<script>
+	import applet from '@/mixins/applet-compatibility'
+	import searchBar from '@/components/search-bar/search-bar'
+	import informationItem from '@/components/information-item/information-item'
+	import { getInformation } from '@/api/application.js'
+	import { isApplicationExist } from '@/utils/nativeAPI.js'
+	
+	export default {
+		components: { searchBar, informationItem },
+		mixins: [applet],
+		data() {
+			return {
+				informationData:[],
+				pageSize: 10, // 请求的页数
+				total: 0, // 全部的数据
+				isRefresh: false,
+				loadinging: false,
+				status: 'loadmore', //loading加载更多 nomore没有了
+				loadingText: '努力加载中',
+				loadmoreText: '轻轻上拉',
+				nomoreText: '实在没有了'
+			}
+		},
+		onLoad() {
+			this.messageBackMPage()
+		},
+		onShow() {
+			this.requestPageInfo()
+		},
+		methods:{
+			// 处理时间格式
+			dateFormat(res) {
+				const t = uni.dayjs(uni.dayjs(res).format("YYYY-MM-DD HH:mm:ss")).fromNow();
+				return t;
+			},
+			// 请求页面初始数据
+			requestPageInfo(){
+				getInformation(this.pageSize).then(res => {
+					console.log('消息推送的是', res)
+					this.total = res.data.total
+					
+					this.informationData = res.data.rows.filter(item => {
+						item.pushTime = this.dateFormat(item.pushTime)
+						if(item.notifyType === 1){
+							item.appName = '系统推送'
+							item.appLogoPic = '/static/information/systemInformation.png'
+						}
+						if(item.notifyType === 1 || isApplicationExist(item.appPackage)){
+							return item
+						}
+					})
+					
+				}).catch(error => { console.log('error in request!', error) })
+			},
+			// 处理下拉刷新数据
+			loadmore(){
+				console.log('下拉加载更多')
+			},
+			onloading() {
+				this.loadinging = true
+				
+				if(this.pageSize <= this.total){
+					this.status = 'loading'
+					this.pageSize += 10
+					this.requestPageInfo()
+				}else{
+					this.status = 'nomore'
+				}
+				
+        setTimeout(() => {
+          this.loadinging = false
+        }, 2000)
+			},
+			// 消息右划返回主页面
+			messageBackMPage(){
+				let pages = getCurrentPages();
+				
+				let homePage = pages[0]
+				let hometWs = homePage.$getAppWebview();
+				
+				let page = pages[pages.length - 1]
+				let ws = page.$getAppWebview();
+				
+				ws.drag(
+				{
+					direction: 'right',
+					moveMode: 'followFinger'
+				},{
+					view: hometWs,
+					moveMode: 'silent'
+				}, function(e){
+					hometWs.setStyle({mask:'rgba(0,0,0,0.5)'})
+					if(e.type == 'end' && e.result){
+						hometWs.setStyle({mask:'none'})
+					}
+				}
+				)
+			},
+			// 回退到主页面
+			goBack(){
+				uni.navigateBack({
+					delta: 1
+				});
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.page{
+	padding: 0 30rpx 0 30rpx;
+}
+</style>

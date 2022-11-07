@@ -1,0 +1,185 @@
+<template>
+	<view ref="card" class="card" :style="cardStyle" @touchstart="touchstart" @longpress="longpress">
+		<view class="content" :style="cardStyle" @click="into_app">
+			<u--image :src="imageSrc === undefined ? defaultImg : imageSrc" shape="circle" width="100rpx"
+				height="100rpx" />
+			<u--text margin="20rpx 0 0 0" :text="text" align="center" size="26" :lines="text.length > 5 ? 1 : false"
+				:color="color" />
+		</view>
+	</view>
+</template>
+
+<script>
+	const dom = uni.requireNativePlugin('dom');
+	// 卡片操作浮动窗口
+	import CardOperation from "@/components/card-operation/card-operation";
+	const animation = uni.requireNativePlugin('animation');
+	export default {
+		name: "app-quick",
+		components: {
+			CardOperation
+		},
+		props: {
+			pageHeight: {
+				type: [Number]
+			},
+			// 主页面所有卡片的rect，支持动态更新
+			rectList: {
+				type: [Array]
+			},
+			maskShow: {
+				type: [Boolean]
+			},
+			id: {
+				type: [String]
+			},
+			activeCardId: {
+				type: [String]
+			},
+			imageSrc: {
+				type: [String, Number],
+				require: true
+			},
+			text: {
+				type: String,
+				default: '文本'
+			},
+			// 宽度
+			widApp: {
+				type: String,
+				default: '136rpx'
+			},
+			// 是否允许拖拽
+			allowDrag: {
+				type: Boolean,
+				default: true
+			},
+			// 当前应用的信息
+			itemData: {
+				type: [Object, Array],
+				default: {}
+			},
+			color: {
+				type: [String],
+				default: "black"
+			},
+			index: {
+				type: Number,
+			}
+		},
+		data() {
+			return {
+				dragY: 0,
+				dragX: 0,
+				init: false,
+				isLongpress: false, //是否长按
+				transition: false, //是否开启动画
+				elevation: '0px', //卡片的阴影大小 可以修改view的显示层级，同浏览器端的z-index
+				isCardCoincidence: false, //卡片是否重合
+				//卡片view的边框信息，包括高度、宽度、top、left、bootom、right
+				rect: {
+					top: 0,
+					left: 0,
+					right: 0,
+					bottom: 0,
+					width: 0, //卡片宽度 px
+					height: 0, //卡片高度 px
+				},
+				main_binding: null,
+				coincidenceRECT: null, // 重合卡片的rect
+				isHandleCoincidence: false, // 是否正在计算重合、相交
+				initStyle: {},
+				defaultImg: '/static/application_image/quick_block.png' // 默认快捷入口图标
+			};
+		},
+		computed: {
+			cardStyle() {
+				if (this.init) {
+					return {
+						width: this.widApp
+					}
+				} else {
+					return {
+						width: this.widApp
+					}
+				}
+			}
+		},
+		watch: {
+		},
+		created() {},
+		mounted() {
+			setTimeout(() => {
+				this.initCardOffset();
+			}, 1000)
+		},
+		updated() {},
+		beforeDestroy() {},
+		methods: {
+			into_app() {
+				console.log('进入了APP')
+				if (this.isLongpress === false) {
+					this.$emit('into_app')
+				}
+			},
+			throwCardOffset() {
+				uni.$emit(this.initCardOffset)
+			},
+			// 卡片偏移量初始化
+			initCardOffset() {
+				// 解决getComponentRect 获取某个元素 View 的外框 得到的数据不准确
+				dom.getComponentRect(this.$refs.card, option => {
+					// console.log("卡片偏移量初始化", option.size)
+					this.dragX = option.size.left;
+					this.dragY = option.size.top;
+					this.rect = option.size;
+					// this.init = true
+				})
+			},
+			// 触摸开始
+			touchstart(event) {
+				if (this.isLongpress === true) {
+					console.log("触摸卡片，关闭遮罩层！")
+					setTimeout(() => {
+						this.isLongpress = false
+					}, 200)
+					uni.$emit("watchCardLongpress_1", {
+						type: "close_add_popup",
+						maskShow: false,
+						rect: this.rect,
+						cardId: this.id,
+						cardData: this.itemData
+					})
+				} else {
+					console.log("记录触摸点的rect、触发时间")
+				}
+			},
+			// 长按
+			longpress(event) {
+				console.log("长按")
+				this.isLongpress = true;
+				uni.$emit("watchCardLongpress_1", {
+					type: "open_add_popup",
+					maskShow: true,
+					rect: this.rect,
+					cardId: this.id,
+					cardData: this.itemData
+				})
+			},
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.card {
+		height: 155rpx;
+		padding: 0 0 0 15rpx;
+		margin: 0 0 30rpx 0;
+	}
+
+	.content {
+		// border: 1px solid red;
+		align-items: center;
+		justify-content: center;
+	}
+</style>

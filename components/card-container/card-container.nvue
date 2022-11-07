@@ -1,0 +1,72 @@
+<template>
+	<view ref="card" @click="clickHandle($event)">
+		<component :cardData="cardData" :isRun="isRun" :is="component" v-if="component" />
+	</view>
+</template>
+
+<script>
+	// 引入所有卡片模版组件
+	import R_icon from "@/components/card-template/card-template-R_icon/card-template-R_icon"
+	import R_pic from "@/components/card-template/card-template-R_pic/card-template-R_pic"
+	import S_icon from "@/components/card-template/card-template-S_icon/card-template-S_icon"
+	import S_icon_pic from "@/components/card-template/card-template-S_icon_pic/card-template-S_icon_pic"
+	import S_pic from "@/components/card-template/card-template-S_pic/card-template-S_pic"
+	import S_text from "@/components/card-template/card-template-S_text/card-template-S_text"
+	import S_text_bar from "@/components/card-template/card-template-S_text_bar/card-template-S_text_bar"
+	export default {
+		components: {
+			R_icon,
+			R_pic,
+			S_icon,
+			S_icon_pic,
+			S_pic,
+			S_text,
+			S_text_bar
+		},
+		props: {
+			cardIndex: {
+				type: [String, Boolean],
+				default: false
+			},
+			item:{
+				type: [Object],
+				default: {}
+			},
+			cardData:{
+				type: [Object],
+				default: {}
+			},
+			isRun:{
+				type:[Boolean],
+				default:false
+			},
+			// 是否补齐域名或ip地址
+			isBaseUrl:{
+				type:[Boolean],
+				default:true
+			}
+		},
+		data() {
+			return {
+				component: false,
+			}
+		},
+		computed: {},
+		watch: {},
+		created() {
+			if (this.cardIndex != false) {
+				this.component = this.cardIndex
+			}
+		},
+		mounted() {},
+		methods: {
+			clickHandle(event){
+				this.$emit("cardTap",this.cardData);
+			}
+		},
+		beforeDestroy() {}
+	}
+</script>
+
+<style lang="scss" scoped>
+</style>

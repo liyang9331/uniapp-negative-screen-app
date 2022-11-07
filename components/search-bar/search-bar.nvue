@@ -1,0 +1,157 @@
+<template>
+	<view class="top-search" :style="setStyle">
+		<u--image
+			v-if="needComponents.find(item => item == 'arr')"
+			:src="arrBtn"
+			class="top-re-btn"
+			width="46rpx"
+			height="46rpx"
+			@click="goBack"
+		></u--image>
+		<view
+			v-if="needComponents.find(item => item == 'search')"
+			:style="style"
+		>
+			<u--input
+				:customStyle="{ backgroundColor: '#fff' }"
+				v-model="searchContent"
+				prefixIcon="search"
+				prefixIconStyle="font-size: 38rpx;color: #666666;height: 38rpx;padding-top: 10rpx"
+				shape="circle"
+				:placeholder="placeholder"
+				@change="showSearch"
+			></u--input>
+		</view>
+		<u--text
+			v-if="needComponents.find(item => item == 'search')"
+			class="top-btn"
+			text="搜索"
+			size="28rpx"
+			color="#2D73FF"
+			@click="searchBtn"
+		></u--text>
+		<u--text
+			v-if="needComponents.find(item => item == 'text')"
+			:text="title"
+			bold
+			size="36rpx"
+		/>
+	</view>
+</template>
+
+<script>
+	const storage = uni.requireNativePlugin('storage')
+	export default {
+		name:"search-bar",
+		props:{
+			style:{
+				type: Object,
+				default: {
+					width: '528rpx',
+					height: '68rpx',
+					margin: '10rpx 30rpx 0 0'
+				}
+			},
+			placeholder:{
+				typeof:[String],
+				default:"搜索"
+			},
+			// 设置top-search的样式
+			setStyle:{
+				type: Object,
+				default: {}
+			},
+			// 需要的组件
+			needComponents:{
+				type: Array,
+				default: ['arr', 'search', 'text']
+			},
+			title:{
+				type: String,
+				default: '信息'
+			},
+			// 外部传入搜索词
+			outSearchWord:{
+				type: String,
+				default: ''
+			},
+			// 按钮颜色改变
+			arrBtn:{
+				type: String,
+				default: '../../static/search_image/return.png'
+			}
+		},
+		data() {
+			return {
+				searchContent: '',
+				searchHistoryWordArr: [] // 获取搜索历史
+			}
+		},
+		watch: {
+			outSearchWord(newValue){
+				this.searchContent = newValue
+				// this.searchBtn()
+			}
+		},
+		methods:{
+			// 返回按钮调用的函数
+			goBack(){
+				this.searchContent = ''
+				this.$emit('goBack')
+			},
+			// 搜索信息
+			searchBtn(){
+				if(this.searchContent === ''){
+					// 搜索为空不处理
+				}else{
+					this.handleHistorySearch()
+					this.$emit('handleSearch', this.searchContent)
+				}
+			},
+			// 添加与保存搜索内容
+			handleHistorySearch(){
+				storage.getItem('searchHistoryWord', callBack => {
+					if(callBack.data === "undefined"){
+						this.searchHistoryWordArr = []
+						this.searchHistoryWordArr.push(this.searchContent)
+						storage.setItem('searchHistoryWord', JSON.stringify(this.searchHistoryWordArr) , callBack => {
+							// console.log('callBack.result', callBack.result)
+						})
+					}else{
+						this.searchHistoryWordArr = JSON.parse(callBack.data)
+						const key = this.searchHistoryWordArr.indexOf(this.searchContent)
+						if(key !== -1){
+							this.searchHistoryWordArr.splice(key, 1)
+						}
+						this.searchHistoryWordArr.unshift(this.searchContent)
+						storage.setItem('searchHistoryWord', JSON.stringify(this.searchHistoryWordArr) , callBack => {
+							// console.log('callBack.result', callBack.result)
+						})
+					}
+				})
+			},
+			// 展现搜索内容（未点击确认前）
+			showSearch(){
+				this.$emit('showSearch', this.searchContent)
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.top-search{
+	height: 88rpx;
+	width: 690rpx;
+	margin: 0 0 30rpx 0;
+	flex-direction: row;
+
+	.top-re-btn{
+		padding: 21rpx 0 0 0 ;
+		margin: 0 30rpx 0 0;
+	}
+	.top-text{
+		width: 56rpx;
+		height: 37rpx;
+	}
+}
+</style>

@@ -1,0 +1,210 @@
+<template>
+	<view class="page">
+		<view :style="{height: statusBarHeight + 'px'}"></view>
+		<searchBar
+			:needComponents="['arr', 'search']"
+			:outSearchWord="outSearchWord"
+			@handleSearch="handleSearch"
+			@showSearch="showSearch"
+			@goBack="goBack"
+		/>
+		<searchHistory v-if="status === 0" @sendHistoryWord="into_searchResult" />
+		<todayHotWord v-if="status === 0" @searchHotWord="into_searchResult" />
+		<searchResult v-if="status === 1" :messageInfo="messageInfo" :application="application" />
+		<searchResultNot
+			v-if="status === 2"
+			src="/static/search_image/search_not.png"
+			content="根据相关法律法规和政策,部分搜索结果未予展示"
+		/>
+		<list v-if="showPreResult && preSearchResultData !== ''" class="hide__result">
+			<cell
+				class="hide__result__in"
+				v-for="(item, index) in searchInfo"
+			>
+				<u-icon
+					class="hide__result__in__icon"
+					name="search"
+					size="35"
+					color="#666"
+				/>
+				<text
+					class="hide__result__in__text"
+					@click="into_searchResult(item)"
+				>
+					{{item | filter_searchWord}}
+				</text>
+			</cell>
+		</list>
+	</view>
+</template>
+
+<script>
+import applet from '@/mixins/applet-compatibility'
+import searchBar from '@/components/search-bar/search-bar'
+import searchHistory from '@/components/search-history/search-history'
+import todayHotWord from '@/components/search-todayHotWord/search-todayHotWord'
+import searchResult from '@/components/search-result/search-result'
+import searchResultNot from '@/components/search-result-not/search-result-not'
+// 引入搜索
+import { getSearch, addHotWords } from '@/api/application.js'
+import { isApplicationExist } from '@/utils/nativeAPI.js'
+
+const storage = uni.requireNativePlugin('storage')
+export default {
+	components: {
+		searchBar,
+		searchHistory,
+		todayHotWord,
+		searchResult,
+		searchResultNot
+	},
+	mixins: [applet],
+	filters:{
+		filter_searchWord(value){
+			let reg = /<\/{0,1}em>/g
+			let key = value.replace(reg, '')
+			try{
+				return key.length > 22 ? key.slice(0,22) + '...' : key
+			}catch(e){
+				return key
+			}
+		}
+	},
+	data() {
+		return {
+			status: 0, //展示的页面 0搜索前 1搜索后 2搜索结束失败
+			inputContent: '',
+			searchInfo: [], // 预搜索的信息列表
+			showPreResult: false, // 弹出预搜索界面
+			messageInfo: [], // 搜索的结果_信息
+			application: [], // 搜索的结果_应用
+			preSearchResultData: '', // 预搜索的结果
+			outSearchWord: ''
+		}
+	},
+	onLoad() {
+		this.messageBackMPage()
+	},
+	methods:{
+		// 处理搜索情况
+		handleSearch(content){
+			this.clearSearch()
+			getSearch({ searchValue: content }).then(res => {
+					// 添加搜索词为热搜词
+					addHotWords({ searchValue: content })
+					console.log('搜索的结果', res)
+				if(res.data.data.hasStopWords === 'T'){
+					this.status = 2
+				}else{
+					res.data.data.list.forEach(item => {
+						if(item.notifyId){
+							if(isApplicationExist(item.appPackage)){
+								this.messageInfo.unshift(item)
+							}
+						}else{
+							if(isApplicationExist(item.appPackage)){
+								this.application.push(item)
+							}
+						}
+					})
+					// console.log('排序完的结果为', this.messageInfo)
+					this.status = 1
+				}
+			}).catch(error => { console.log(error) })
+			this.showPreResult = false
+		},
+		// 处理预搜索（未搜索）的页面信息
+		showSearch(content){
+			this.clearSearch()                                                                                                                                                                                           
+			getSearch({ searchValue: content }).then(res => {
+				this.preSearchResultData = res.data.data.list
+			})
+			.then(() => {
+				const arr = []
+				this.preSearchResultData.forEach(item => {
+						// arr.push(item.highlightContent)
+						arr.push(item.summary || item.appName)
+				})
+				this.searchInfo = arr
+				this.showPreResult = this.searchInfo.length === 0 ? false : true
+			})
+			.catch(error => { console.log(error) })
+		},
+		// 预搜索时，点击进入搜索结果页面
+		into_searchResult(value){
+			this.handleSearch(value)
+			this.outSearchWord = value
+		},
+		// 消息右划返回主页面
+		messageBackMPage(){
+			let pages = getCurrentPages();
+			
+			let homePage = pages[0]
+			let hometWs = homePage.$getAppWebview();
+			
+			let page = pages[pages.length - 1]
+			let ws = page.$getAppWebview();
+			
+			ws.drag(
+			{
+				direction: 'right',
+				moveMode: 'followFinger'
+			},{
+				view: hometWs,
+				moveMode: 'silent'
+			}, function(e){
+				hometWs.setStyle({mask:'rgba(0,0,0,0.5)'})
+				if(e.type == 'end' && e.result){
+					hometWs.setStyle({mask:'none'})
+				}
+			}
+			)
+		},
+		// 返回
+		goBack(){
+			this.showPreResult = false
+			if(this.status === 0) {
+				uni.navigateBack({
+					delta: 1
+				})
+			}else{
+				this.status = 0
+				this.clearSearch()
+			}
+		},
+		clearSearch(){
+			this.messageInfo = []
+			this.application = []
+		}
+	}
+}
+</script>
+
+<style lang="scss" scoped>
+.page{
+	position: relative;
+	padding: 0 30rpx 0 30rpx;
+	
+	.hide__result{
+		position: absolute;
+		width: 690rpx;
+		height: 1200rpx;
+		top: 150rpx;
+		padding: 30rpx;
+		border-radius: 30rpx;
+		background-color: #fff;
+		
+		.hide__result__in{
+			flex-direction: row;
+			padding: 0 0 32rpx 0;
+		}
+		.hide__result__in__icon{
+			width: 50rpx;
+		}
+		.hide__result__in__text{
+			font-size: 26rpx;
+			color: #666;
+		}
+	}
+}
+</style>

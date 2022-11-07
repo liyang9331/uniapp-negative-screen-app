@@ -1,0 +1,132 @@
+<template>
+	<view class="page" :style="{}">
+		<view class="page_in" ref="page_in" @touchstart="touchstart" @touchmove="touchmove" @touchend="touchend"
+		@longpress="longpress">
+			
+		</view>
+	</view>
+</template>
+
+<script>
+	const dom = uni.requireNativePlugin('dom')
+	const animation = uni.requireNativePlugin('animation')
+	export default {
+		data() {
+			return {
+				// 主要页面参数
+				size: {
+					bottom: 0,
+					height: 0,
+					left: 0,
+					right: 0,
+					top: 0,
+					width: 0
+				},
+				touchStartDot: '',
+				touchEndDot: '',
+				// 判断是否滚动到了顶部
+				isRollPageTop: false
+			}
+		},
+		onLoad() {
+			
+		},
+		computed: {
+			// pageStyle() {
+			// 	let style = {}
+			// 	if (true) {
+			// 		// 卡片长按拖拽时，限制窗口上下滑动
+			// 		style = {
+			// 			height: uni.$store.state.systemInfo.windowHeight + 'px'
+			// 		}
+			// 	} else if (this.pageHeight != 0) {
+			// 		style = {
+			// 			height: this.pageHeight + 20 + 'px'
+			// 		}
+			// 	}
+			// 	return style
+			// }
+		},
+		methods:{
+			// 处理下拉进入app应用页面
+			handleTopRefresh(event){
+				this.size.left = event.changedTouches[0].pageX
+				this.size.top = event.changedTouches[0].pageY
+				animation.transition(this.$refs.page_in, {
+					styles:{
+						transform: `translateY(${1200}rpx, ${1200}rpx)`
+					},
+					duration: 600,
+					transformOrigin: 'center center',
+					timingFunction: 'ease',
+					needLayout: false,
+					delay: 0
+				}, () => {
+					this.into_page()
+					delay: 500
+				})
+			},
+			// 进入页面
+			into_page() {
+				uni.redirectTo({
+					url: '/pages/application_activity/application_activity'
+				})
+			},
+			// 判断是否可以下拉刷新
+			isPageTopPull() {
+				
+			},
+			// 判断上划还是下划 上划返回true 否则返回false
+			isSlipeTopOrBottom(){
+				if(this.touchStartDot > this.touchEndDot){
+					console.log('上划')
+					return false
+				}else{
+					console.log('下划')
+					return true
+				}
+			},
+			
+			touchstart(event){
+				this.touchStartDot = event.changedTouches[0].screenY
+				dom.getComponentRect(this.$refs.page_in, options => {
+					this.size = options.size
+				})
+			},
+			touchmove(event){
+				dom.getComponentRect(this.$refs.page_in, options => {
+					if(options.size.top > 30){
+						this.styles = true
+					}
+				})
+				this.isPageTopPull(event)
+				
+				
+				this.isSlipeTopOrBottom(event)
+			},
+			touchend(event){
+				this.touchEndDot = event.changedTouches[0].screenY
+				this.isSlipeTopOrBottom()
+				if(this.isSlipeTopOrBottom() === true){
+					this.handleTopRefresh(event)
+				}
+			},
+			longpress(){
+				// console.log('longPress')
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.page{
+	padding: 0 30rpx;
+	padding-top: 60rpx;
+	
+	&_in{
+		width: 690rpx;
+		height: 1400rpx;
+		background-color: red;
+	}
+}
+</style>

@@ -1,0 +1,227 @@
+<template>
+	<view ref="card" class="" :style="style" :elevation="elevation+'px'">
+		<cardContainer :isBaseUrl="false" :isRun="isRun" :cardData="cardData" :cardIndex="cardIndex" />
+	</view>
+</template>
+
+<script>
+	const dom = uni.requireNativePlugin("dom");
+	// animation模块可以用来在组件上执行动画
+	const animation = uni.requireNativePlugin('animation');
+	import cardContainer from "@/components/card-container/card-container"
+	export default {
+		components: {
+			cardContainer
+		},
+		props: {
+			src: {
+				type: [String],
+				default: ""
+			},
+			index: {
+				type: Number,
+			},
+			cardData:{
+				type:[Object],
+				default:{}
+			},
+			bottomRect: {
+				type: [Object],
+				default: {}
+			},
+			isReady: {
+				type: [Boolean],
+				default: false
+			},
+			cardIndex: {
+				type: [String,Boolean],
+				default: false
+			},
+			length:{
+				type:[Number],
+				default:0
+			},
+			isRun:{
+				type:[Boolean],
+				default:false
+			},
+		},
+		data() {
+			return {
+				elevation: 0,
+				rect: {},
+			}
+		},
+		computed: {
+			style() {
+				this.elevation = 100 - this.index / 1000
+				if (this.index == 0) {
+					return {
+						"position": "absolute",
+						"top": "250rpx"
+					}
+				} else if (this.index == 1) {
+					return {
+						"position": "absolute",
+						"top": "50rpx",
+						// "transform":"rotateX(45deg)",
+						// "perspective":"1000px"
+					}
+				} else if (this.index == 2) {
+					return {
+						"position": "absolute",
+						"top": "0rpx"
+					}
+				}else{
+					return {
+						"position": "absolute",
+						"top": "0rpx"
+					}
+				}
+			},
+		},
+		watch: {},
+		created() {
+			// console.log(this.cardData)
+		},
+		mounted() {
+			if (this.index > 0) {
+				animation.transition(this.$refs.card, {
+						styles: {
+							transform: 'rotateX(-15deg) perspective(1000px)',
+						},
+						duration: 10, //ms
+						timingFunction: 'ease',
+						delay: 0 //ms
+					},
+					function() {})
+			}
+			setTimeout(() => {
+				dom.getComponentRect(this.$refs.card, option => {
+					this.rect = option.size
+				})
+			}, 500);
+			uni.$on("addCardPreview", (res, multiple = 2) => {
+				// app对应卡片的数量
+				const cardTotal = this.length;
+				if (this.index == res.index) {
+					if (res.type == "slide_downward") {
+						// 下滑
+						if (multiple == 2) {
+							const l = uni.$store.state.systemInfo.windowHeight - this.bottomRect.height - this.rect
+								.top - this.rect.height / multiple;
+							const style = {
+								transform: 'translateY(' + l + 'px) rotateX(-30deg) perspective(1000px)',
+							}
+							this.goAnimation(style);
+							uni.$emit("addCardPreview", {
+								type: "reset",
+								step: 1,
+								index: res.index + 1
+							})
+							uni.$emit("addCardPreview", {
+								type: "reset",
+								step: 2,
+								index: res.index + 2
+							})
+						} else {
+							const l = uni.$store.state.systemInfo.windowHeight - this.bottomRect.height - this.rect
+								.top;
+							const style = {
+								transform: 'translateY(' + l + 'px) rotateX(-30deg) perspective(1000px)',
+							}
+							this.goAnimation(style);
+						}
+						if (res.index > 0 && res.index < cardTotal) {
+							uni.$emit("addCardPreview", {
+								type: "slide_downward",
+								index: res.index - 1
+							}, 0)
+						}
+					} else if (res.type == "Upslide") {
+						// 上滑
+						if (res.index > 0 && res.index < cardTotal) {
+							const style = {
+								transform: 'translateY(' + 50 + 'px)',
+							}
+							this.goAnimation(style);
+							uni.$emit("addCardPreview", {
+								type: "reduction",
+								index: res.index + 1
+							})
+							// 中间层卡片上滑，-1卡片回归底部
+							uni.$emit("addCardPreview", {
+								type: "return_bottom",
+								index: res.index - 1
+							})
+						} else {
+							const style = {
+								transform: 'translateY(' + 0 + 'px)',
+							}
+							this.goAnimation(style);
+							uni.$emit("addCardPreview", {
+								type: "reduction",
+								index: res.index + 1
+							})
+						}
+					} else if (res.type == "reset") {
+						// 复位
+						if (res.step == 1) {
+							const style = {
+								transform: 'translateY(' + 50 + 'px)rotateX(0deg) perspective(0px)',
+							}
+							this.goAnimation(style);
+						} else {
+							const style = {
+								transform: 'translateY(' + 10 + 'px)rotateX(0deg) perspective(0px)',
+							}
+							this.goAnimation(style);
+						}
+
+					} else if (res.type == "reduction") {
+						// 还原
+						const style = {
+							transform: 'rotateX(-20deg) perspective(1000px)',
+						}
+						this.goAnimation(style);
+					} else if (res.type == "return_bottom") {
+						// 卡片回归底部
+						const l = uni.$store.state.systemInfo.windowHeight - this.bottomRect.height - this.rect
+							.top - this.rect.height / 2;
+						const style = {
+							transform: 'translateY(' + l + 'px) rotateX(-30deg) perspective(1000px)',
+						}
+						this.goAnimation(style);
+					}
+				}
+			})
+		},
+		methods: {
+			getEl(el) {
+				if (typeof el === 'string' || typeof el === 'number') return el;
+				if (WXEnvironment) {
+					return el.ref;
+				} else {
+					return el instanceof HTMLElement ? el : el.$el;
+				}
+			},
+			goAnimation(style) {
+				animation.transition(this.$refs.card, {
+						styles: style,
+						duration: 200, //ms
+						timingFunction: 'linear',
+						delay: 0 //ms
+					},
+					() => {
+
+					})
+			},
+		},
+		beforeDestroy() {
+			uni.$off("addCardPreview")
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+</style>

@@ -1,0 +1,228 @@
+<template>
+	<div class="page" ref="page">
+		<!-- 填充状态栏 -->
+		<div :style="{height:statusBarHeight+'px'}"></div>
+		<div class="navbar">
+			<u--image @click="navigateBackTo" src="/static/search_image/return.png" width="46rpx" height="46rpx">
+			</u--image>
+			<text class="title">添加小部件</text>
+		</div>
+		<view class="search">
+			<search :needComponents="['search']" :placeholder="'请输入想要的小部件'"
+				:style="{width:'690rpx',height:'90rpx',margin:'0 0 0 0'}" @showSearch="showSearch"></search>
+		</view>
+		<div class="content" v-for="(items,keys) in cardList" :key="keys"
+			v-if="items.cardList.length>0 && isSearch===false">
+			<div class="card-head">
+				<text>{{items.columnName}}</text>
+			</div>
+			<div class="card-list">
+				<cardContainer class="card" v-for="(item,index) in items.cardList" :cardData="item" :key="index"
+					:isRun="false" @cardTap="cardTap(item)"
+					:cardIndex="item.cardTmpl!=null?item.cardTmpl.tmplCode:false" />
+			</div>
+		</div>
+		<div class="card-list" v-if="isSearch===true">
+			<cardContainer class="card" v-for="(item,index) in serchList" :cardData="item" :key="index" :isRun="false"
+				@cardTap="cardTap(item)" :cardIndex="item.cardTmpl!=null?item.cardTmpl.tmplCode:false" />
+		</div>
+		<div style="width: 750rpx;height: 100rpx;"></div>
+	</div>
+</template>
+
+<script>
+	import apt from "@/mixins/applet-compatibility.js"
+	import search from "@/components/search-bar/search-bar"
+	import cardContainer from "@/components/card-container/card-container"
+	const dom = uni.requireNativePlugin('dom')
+	import {
+		getCardList
+	} from "@/api/card.js"
+	import {
+		getColumnList
+	} from "@/api/column.js"
+	import storage from "../../utils/storage"
+	import netchange from "@/utils/netchange.js"
+	export default {
+		mixins: [apt],
+		components: {
+			search,
+			cardContainer
+		},
+		data() {
+			return {
+				pageHeight: 0,
+				cardList: [],
+				columnList: [],
+				nativeCardList: [],
+				serchList: [], //搜索结果
+				isSearch: false, //是否搜索
+			};
+		},
+		computed: {},
+		onLoad() {
+			if(netchange()===false){
+				// 弱网环境，使用本地缓存数据
+				console.log("弱网环境，使用本地缓存数据")
+				let cardList = storage.get("addCardList");
+				if (cardList != null) {
+					this.cardList = cardList;
+				} else {
+					this.cardList = [];
+				}
+			}else{
+				getColumnList({}).then(res => {
+					// console.log(res)
+					this.columnList = res.data.rows;
+					getCardList({
+						status: 2,
+						page: 1,
+						pageSize: 1000
+					}).then(res => {
+						this.nativeCardList = res.data.rows;
+						// 处理数据
+						let arr = [];
+						this.columnList.forEach((items) => {
+							let list = {
+								...items,
+								cardList: []
+							};
+							res.data.rows.forEach((item) => {
+								if (items.columnId == item.application.columnId) {
+									list.cardList.push(item)
+								}
+							})
+							arr.push(list);
+						})
+						this.cardList = arr;
+						// 缓存到本地
+						storage.set("addCardList", arr).then(res => {
+							// console.log(res)
+						})
+						storage.set("nativeCardList", res.data.rows).then(res => {
+							// console.log(res)
+						})
+					}).catch(err => {})
+				}).catch(err => {
+
+				})
+			}
+			
+		},
+		onReady() {
+			// 获取初始化渲染时页面的高度
+			dom.getComponentRect(this.$refs.page, option => {
+				this.pageHeight = option.size.height;
+			})
+		},
+		methods: {
+			// 搜索
+			showSearch(res) {
+				if (res == "") {
+					// 还原
+					this.isSearch = false;
+					this.serchList = []
+				} else {
+					// 匹配搜索结果
+					const list = this.nativeCardList.filter(v => v.cardName != null && v.cardName.indexOf(res) != -1);
+					if (list.length > 0) {
+						this.serchList = list
+						this.isSearch = true;
+					} else {
+						this.serchList = [];
+						this.isSearch = true
+					}
+				}
+			},
+			navigateBackTo() {
+				// 延迟执行，等待主页面渲染完成
+				uni.navigateBack({
+					delta: 1,
+					success: () => {},
+					fail: () => {
+
+					}
+				});
+			},
+			cardTap(data) {
+				uni.navigateTo({
+					url: "/pages/add-card-preview/add-card-preview",
+					events: {
+						// 为指定事件添加一个监听器，获取被打开页面传送到当前页面的数据
+						// acceptDataFromOpenedPage: function(data) {
+						//   console.log(data)
+						// },
+						// someEvent: function(data) {
+						//   console.log(data)
+						// }
+					},
+					success: (res) => {
+						// 处理卡片数据
+						let arr = [];
+
+						this.nativeCardList.forEach((item, key) => {
+							if (item.appId == data.appId) {
+								arr.push(item)
+							}
+						})
+						// console.log(this.nativeCardList)
+						// 通过eventChannel向被打开页面传送数据
+						res.eventChannel.emit('acceptDataFromOpenerPage', arr)
+					},
+					fail: (err) => {
+						console.log(err)
+					}
+				})
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.page {
+		padding: 0 30rpx 0 30rpx;
+		background-color: #F3F4F6;
+	}
+
+	.search {
+		margin-top: 30rpx;
+	}
+
+	.content {
+		margin-top: 30rpx;
+		// border: 1px solid red;
+	}
+
+	.navbar {
+		flex-direction: row;
+		align-items: center;
+		margin-top: 40rpx;
+
+		& .title {
+			font-size: 36rpx;
+			margin-left: 40rpx;
+		}
+	}
+
+	.card-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+
+		& .more {
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+		}
+	}
+
+	.card-list {
+		flex-direction: row;
+		flex-wrap: wrap;
+		justify-content: space-between;
+	}
+
+	.card {
+		margin-top: 30rpx;
+	}
+</style>

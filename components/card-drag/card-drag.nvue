@@ -1,0 +1,905 @@
+<template>
+	<view class="card" ref="card" :style="cardStyle" :elevation="elevation" @touchmove="touchmove"
+		@touchstart="touchstart" @touchend="touchend" @longpress="longpress">
+		<cardContainer ref="cardContainer" :cardData="cardData" :isRun="true"
+			:cardIndex="cardData.cardTmpl!=null?cardData.cardTmpl.tmplCode:false">
+		</cardContainer>
+		<!-- 遮盖 -->
+		<view @click.stop="hideMask" v-if="activeCardId==cardData.cardId?maskShow:false" class="mask-layer"
+			:style="maskStyle"></view>
+		<CardOperation :id="cardData.cardId" @remove="removeCard" v-if="activeCardId==cardData.cardId?maskShow:false"
+			:cardLayoutHeight="rect.height" :operationRect="operationRect"></CardOperation>
+		<!-- rect 提示 -->
+		<!-- 				<view class="rect-tips" :style="maskStyle">
+			<text class="id">{{"id:"+id}}</text>
+			<text class="top">{{"RT:"+parseInt(this.rect.top)+","+"T:"+parseInt(this.dragY)}}</text>
+			<text class="left">{{'RL:'+parseInt(this.rect.left)+","+"L:"+parseInt(this.dragX)}}</text>
+		</view> -->
+	</view>
+</template>
+
+<script>
+	const dom = uni.requireNativePlugin('dom')
+	// 卡片操作浮动窗口
+	import CardOperation from "@/components/card-operation/card-operation"
+	// animation模块可以用来在组件上执行动画
+	const animation = uni.requireNativePlugin('animation')
+	const bindingx = uni.requireNativePlugin('bindingx');
+	import cardContainer from "@/components/card-container/card-container"
+	import cloneDeep from "lodash.clonedeep"
+	export default {
+		name: "card-drag",
+		components: {
+			CardOperation,
+			cardContainer
+		},
+		props: {
+			cardData: {
+				type: Object,
+				default: {}
+			},
+			pageHeight: {
+				type: Number
+			},
+			// 主页面所有卡片的rect，支持动态更新
+			rectList: {
+				type: Array
+			},
+			maskShow: {
+				type: Boolean
+			},
+			activeCardId: {
+				type: String
+			},
+			id: {
+				type: [Number, String]
+			},
+			scrollTop: {
+				type: Number
+			}
+		},
+		data() {
+			return {
+				dragY: 0,
+				dragX: 0,
+				isTouchmove: false, //是否开始触摸移动
+				touchstartX: 0, //触摸时的x轴坐标
+				touchstartY: 0, //触摸时的y轴坐标
+				touchstartTime: 0, //点按的时间戳
+				isLongpress: false, //是否长按
+				init: false, //是否初始化完毕
+				transition: false, //是否开启动画
+				elevation: '0px', //卡片的阴影大小 可以修改view的显示层级，同浏览器端的z-index
+				isCardCoincidence: false, //卡片是否重合
+				//卡片view的边框信息，包括高度、宽度、top、left、bootom、right
+				rect: {
+					top: 0,
+					left: 0,
+					right: 0,
+					bottom: 0,
+					width: 0, //卡片宽度 px
+					height: 0, //卡片高度 px
+				},
+				dragRect:{},//退拽时的rect
+				main_binding: null, //
+				isHandleCoincidence: false, //是否正在计算重合、相交
+				initStyle: {},
+				longpressEnd: false, //长按是否结束
+				isOperationShow: false,
+				operationRect: {}, //操作菜单需要的最新的卡片的rect
+				rectListCopy: [], //
+				isHandleSort: false, //是否正在处理拖拽排序
+			};
+		},
+		computed: {
+			cardStyle() {
+				if (this.init === true) {
+					return {
+						position: "absolute",
+						top: this.dragY + 'px',
+						left: this.dragX + 'px'
+					}
+				} else {
+					return {
+						marginLeft: "30rpx",
+						marginTop: "30rpx"
+					}
+				}
+			},
+			isShow() {
+				return Object.keys(this.cardData).length > 0 ? true : false
+			},
+			maskStyle() {
+				return {
+					width: this.rect.width + 'px',
+					height: this.rect.height + 'px'
+				}
+			}
+		},
+		created() {
+			this.createGlobalEvent();
+		},
+		mounted() {
+			uni.log("卡片挂载到实例")
+		},
+		updated() {},
+		beforeDestroy() {
+			uni.$off("watchCardAndParentCommunication")
+		},
+		watch: {
+			pageHeight: {
+				handler: 'watchPageHeight',
+				immediate: true
+			},
+			rectList(val, oldVal) {
+				this.rectListCopy = val;
+			}
+		},
+		methods: {
+			watchPageHeight(val, oldVal) {
+				if (val > 0) {
+					// uni.log("监听到主页面高度变化")
+					this.initCardOffset()
+				}
+			},
+			hideMask() {
+				uni.$emit("watchCardLongpress", {
+					type: "card_start_touchmove",
+					cardSlide: true,
+					maskShow: false,
+					cardId: this.id
+				})
+			},
+			// 卡片偏移量初始化
+			initCardOffset() {
+				uni.log("get card rect")
+				// 解决getComponentRect 获取某个元素 View 的外框 得到的数据不准确
+				dom.getComponentRect(this.$refs.card, option => {
+					// uni.log(option)
+					this.dragX = option.size.left;
+					this.dragY = option.size.top;
+					// 同步卡片的rect main_activity
+					let rect = option.size
+					dom.getComponentRect(this.$refs.cardContainer, option => {
+						// uni.log("卡片偏移量初始化", option.size)
+						rect.height = option.size.height
+						rect.width = option.size.width
+						this.rect = rect
+						uni.$emit("watchCardLongpress", {
+							type: "synchronization_rect_init",
+							rect: rect,
+							cardId: this.id
+						});
+						this.init = true;
+						// uni.log(this.rect)
+					})
+				})
+			},
+			getEl(el) {
+				if (typeof el === 'string' || typeof el === 'number') return el;
+				if (WXEnvironment) {
+					return el.ref;
+				} else {
+					return el instanceof HTMLElement ? el : el.$el;
+				}
+			},
+			bindTiming() {
+				let card = this.getEl(this.$refs.card);
+				let self = this;
+				let translate_x_origin = "easeOutElastic(t," + self.x + "," + changed_x + ",1000)";
+				var result = bindingx.bind({
+					eventType: 'timing',
+					exitExpression: exit,
+					props: [{
+							element: my,
+							property: 'transform.translateX',
+							expression: translate_x_expression
+						},
+						{
+							element: my,
+							property: 'opacity',
+							expression: opacity_expression
+						}
+					]
+				}, function(e) {
+					if (e.state === 'end' || e.state === 'exit') {
+						// reset x
+						self.x = final_x;
+						self.isInAnimation = false;
+						if (shouldDismiss) {
+							//remove card from hierarchy
+						}
+					}
+				});
+			},
+			removeCard() {
+				this.elevation = "0px";
+				this.isLongpress = false
+				uni.$emit("watchCardLongpress", {
+					type: "card_remove",
+					maskShow: false,
+					cardId: this.id
+				});
+			},
+			// 触摸开始
+			touchstart(event) {
+				uni.log("触摸开始时间：", uni.dayjs().valueOf())
+				if (this.isLongpress === true) {
+					this.elevation = "0px";
+					// uni.log("触摸卡片，关闭遮罩层！")
+					this.isLongpress = false
+					uni.$emit("watchCardLongpress", {
+						type: "card_longpress",
+						maskShow: false,
+						cardId: this.id
+					});
+				} else {
+					this.isLongpress = true;
+					// 初始化触摸点的X,Y
+					this.touchstartX = event.touches[0].screenX;
+					this.touchstartY = event.touches[0].screenY;
+					// 触摸起始点时间戳
+					this.touchstartTime = uni.dayjs().valueOf();
+				}
+			},
+			// 长按
+			longpress(event) {
+				uni.log("长按结束时间：", uni.dayjs().valueOf())
+				// 长按结束和触摸开始间隔 490-500 ms
+				// 弹出操作卡片、显示蒙版层
+				// 提升卡片层级
+				// 修改定位为fixed
+				this.elevation = "0.4px";
+				// 为卡片绑定动画
+				animation.transition(this.$refs.card, {
+					styles: {
+						width: this.rect.width + 10,
+						height: this.rect.height + 10,
+					},
+					duration: 200, //ms
+					timingFunction: 'ease',
+					needLayout: false,
+					delay: 0 //ms
+				}, () => {
+					animation.transition(this.$refs.card, {
+						styles: {
+							width: this.rect.width,
+							height: this.rect.height,
+						},
+						duration: 200, //ms
+						timingFunction: 'ease',
+						needLayout: false,
+						delay: 0 //ms
+					}, () => {
+						this.isLongpress = false;
+						this.longpressEnd = true;
+					})
+				})
+				
+				dom.getComponentRect(this.$refs.card, option => {
+					this.operationRect = option.size
+				})
+				uni.$emit("watchCardLongpress", {
+					type: "card_longpress",
+					cardSlide: true,
+					maskShow: true,
+					cardId: this.id
+				});
+				// 绑定表达式
+				let card = this.getEl(this.$refs.card);
+				if (this.main_binding == null) {
+					// uni.log("为卡片绑定pan表达式")
+					this.main_binding = bindingx.bind({
+						anchor: card,
+						eventType: 'pan',
+						props: [{
+								element: card,
+								property: 'transform.translateX',
+								expression: 'x+0'
+
+							},
+							{
+								element: card,
+								property: 'transform.translateY',
+								expression: "y+0"
+							},
+						]
+					}, (res) => {
+						if (res.state === 'exit') {
+							// uni.log("card bindingx pan exit")
+						} else if (res.state === "start") {
+							// 卡片拖拽开始
+							// res.deltaX 、res.deltaY 为相对位置，相对于 this.rect.left，this.rect.top
+							// uni.log(res)
+						} else if (res.state === "end") {
+							// 卡片拖拽结束
+							// res.deltaX 、res.deltaY 为相对位置，相对于 this.rect.left，this.rect.top
+						}
+					});
+				}
+			},
+			// 监听触摸移动 native -> js 通信
+			touchmove(event) {
+				// 执行间隔 10ms - n
+				if (this.isLongpress === false && this.longpressEnd === true) {
+					// 获取当前卡片实时rect
+					dom.getComponentRect(this.$refs.card, option => {
+						/**
+						 * 重新计算rect
+						 * 为什么要重新计算？
+						 * 原因：初始化时，卡片拖拽组件是相对定位，获取的rect是相对父元素的，初始化后，定位方式变成了绝对定位，此时拖拽获取的
+						 * rect是相对手机屏幕的，需要做兼容
+						 * */
+						// 拖拽组件初始化的rect top和页面高度的差值
+						option.size.top = this.scrollTop + option.size.top;
+						this.dragRect = option.size;
+						const distance = this.calculationMoveDistance(option);
+						if (distance > 3 && this.isHandleCoincidence === false) {
+							this.isHandleCoincidence = true;
+							if (this.maskShow === true) {
+								// 隐藏遮罩层
+								uni.$emit("watchCardLongpress", {
+									type: "card_start_touchmove",
+									cardSlide: true,
+									maskShow: false,
+									cardId: this.id
+								})
+							}
+							let l = 0;
+							if (Math.abs(option.size.left - this.rect.left) > 0) {
+								l = Math.abs(option.size.left - this.rect.left);
+							}
+							if (Math.abs(option.size.top - this.rect.top) > 0) {
+								l = Math.abs(option.size.top - this.rect.top);
+							}
+							if (true) {
+								if (!this.isTouchmove) {
+									this.isTouchmove = true
+								}
+								// 校验当前卡片的坐标是否与其他卡片重合
+								this.checkCoordinateCoincidence(option.size.left, option.size.top, this.rectList)
+									.then(res => {
+										// 获取和当前卡片相交的数组
+										let flag = false;
+										// 相交且重合
+										const list = res;
+
+										if (list.length > 0 && this.isHandleSort === false) {
+											// 正在处理中
+
+											this.isHandleSort = true
+											this.isCardCoincidence = true;
+											flag = true;
+											// 深拷贝rectList
+											console.log(list, this.isHandleSort);
+											let cloneList = cloneDeep(list);
+											let newRectList = [];
+											let cloneRectTop = list[0].rect.top;
+											let cloneRecLeft = this.rect.left;
+											list.forEach((item, key) => {
+												// console.log(item)
+												// 查找list中高度大于等于当前卡片的
+												const outweigh = list.findIndex(v => v.rect.height >=
+													this.rect.height)
+												if (this.rect.top == item.rect.top) {
+													cloneList[key].rect.left = this.rect.left;
+													cloneRecLeft = item.rect.left;
+												} else if (this.rect.width > item.rect.width) {
+													// 拖拽卡片宽度大于目标卡片的宽度
+													console.log("拖拽卡片宽度大于目标卡片的宽度")
+													if (this.rect.height > item.rect.height) {
+														// 拖拽卡片高度大于目标卡片的高度
+														console.log("拖拽卡片高度大于目标卡片的高度")
+														if (outweigh == -1) {
+															// console.log(item.rect.top+(this.rect.height-item.rect.height))
+															if (this.rect.top > item.rect.top) {
+																cloneList[key].rect.top = this.rect
+																	.top + (
+																		this.rect.height - item.rect
+																		.height
+																	);
+															} else {
+																cloneList[key].rect.top = this.rect
+																	.top;
+																cloneRectTop = this.rect.top + item
+																	.rect.height + (item.rect.top - (
+																		this.rect.top + this.rect
+																		.height));
+															}
+														} else {
+															cloneList[key].rect.top = this.rect.top;
+														}
+													} else if (this.rect.height == item.rect.height) {
+														// 拖拽卡片高度等于目标卡片的高度
+														console.log("拖拽卡片高度等于目标卡片的高度")
+														cloneList[key].rect.top = this.rect.top;
+													} else {
+														// 拖拽卡片高度小于于目标卡片的高度
+													}
+												} else if (this.rect.width == item.rect.width) {
+													// 拖拽卡片宽度等于目标卡片的宽度
+													console.log("拖拽卡片宽度等于目标卡片的宽度")
+													cloneList[key].rect.top = this.rect.top;
+													if (this.rect.height < item.rect.height) {
+														// 拖拽卡片高度小于目标卡片的高度
+														console.log("拖拽卡片高度小于目标卡片的高度")
+														// 拖拽卡片高度大于目标卡片的高度
+														let difference = 0;
+														if (this.rect.top > item.rect.top) {
+															// 拖拽卡片top大于目标卡片
+															console.log("拖拽卡片top大于目标卡片")
+															difference = this.rect.top - (item.rect
+																.top + item.rect.height);
+															cloneList[key].rect.top = item.rect.top +
+																this.rect.height + difference;
+														} else {
+															// 拖拽卡片top小于目标卡片
+															console.log("拖拽卡片top小于目标卡片")
+															difference = item.rect.top - (this.rect
+																.top + this.rect.height);
+															cloneList[key].rect.top = this.rect.top;
+															cloneRectTop = this.rect.top + item.rect
+																.height + difference;
+														}
+													} else if (this.rect.height == item.rect.height) {
+														// 拖拽卡片高度等于目标卡片的高度
+														console.log("拖拽卡片高度等于目标卡片的高度")
+														cloneList[key].rect.left = this.rect.left;
+														cloneList[key].rect.top = this.rect.top;
+														cloneRecLeft = item.rect.left;
+														cloneRectTop = item.rect.top;
+													} else {
+														// 拖拽卡片高度大于目标卡片的高度
+														console.log("拖拽卡片高度大于目标卡片的高度")
+														let difference = 0;
+														if (this.rect.top > item.rect.top) {
+															// 拖拽卡片top大于目标卡片
+															console.log("拖拽卡片top大于目标卡片")
+															difference = this.rect.top - (item.rect
+																.top + item.rect.height);
+															cloneList[key].rect.top = item.rect.top +
+																this.rect.height + difference;
+														} else {
+															// 拖拽卡片top小于目标卡片
+															console.log("拖拽卡片top小于目标卡片")
+															difference = item.rect.top - (this.rect
+																.top + this.rect.height);
+															cloneList[key].rect.top = this.rect.top;
+															cloneRectTop = this.rect.top + item.rect
+																.height + difference;
+														}
+													}
+												} else {
+													// 拖拽卡片宽度小于目标卡片的宽度
+													cloneList[key].rect.top = this.rect.top;
+													if (this.rect.height < item.rect.height) {
+														// 拖拽卡片高度小于目标卡片的高度
+														console.log("拖拽卡片高度小于目标卡片的高度")
+														// 过滤相邻卡片，排除拖拽卡片
+														const i = (this.rectList.filter(v => v.id !=
+															this.id)).findIndex(v => v.rect.top ==
+															this.rect.top);
+														// console.log(this.rectList)
+														// console.log(i);
+														if (i > -1) {
+															// 拖拽卡片有相邻卡片
+															let top = item.rect.top;
+															if (this.rectList[i].rect.height >= item
+																.rect.height) {
+																// 相邻卡片的高度大于等于目标卡片的高度
+																console.log("相邻卡片的高度大于等于目标卡片的高度")
+																console.log(this.rectList.filter(v => v
+																	.id != this.id))
+																cloneList[key].rect.top = this.rect
+																	.top;
+															} else {
+																// 相邻卡片的高度小于目标卡片的高度
+																// 拖拽卡片和目标卡片的间隙高度
+																console.log("相邻卡片的高度小于目标卡片的高度")
+																let difference = 0;
+																if (this.rect.top > item.rect.top) {
+																	// 拖拽卡片top大于目标卡片
+																	if (this.rectList[i].rect.height >
+																		this.rect.height) {
+																		// 相邻卡片的高度大于拖拽卡片的高度
+																		difference = this.rect.top - (
+																			item.rect.top + this.rectList[i].rect.height);
+																		cloneList[key].rect.top = item
+																			.rect
+																			.top + this.rectList[i]
+																			.rect.height +
+																			difference;
+																	} else {
+																		difference = this.rect.top - (
+																			item
+																			.rect.top + item
+																			.rect
+																			.height);
+																		cloneList[key].rect.top = item
+																			.rect
+																			.top + this.rect.height +
+																			difference;
+																	}
+																} else {
+																	// 拖拽卡片top小于目标卡片
+																	console.log("拖拽卡片top小于目标卡片")
+																	if (this.rectList[i].rect.height >
+																		this.rect.height) {
+																		difference = item.rect.top - (
+																			this
+																			.rect.top + this
+																			.rectList[i].rect
+																			.height);
+																		cloneList[key].rect.top = this
+																			.rect
+																			.top;
+																		top = this.rect.top + this
+																			.rectList[i].rect
+																			.height + difference;
+																		cloneRectTop = this.rect.top +
+																			this.rectList[i]
+																			.rect.height + difference;
+																	} else {
+																		difference = item.rect.top - (
+																			this
+																			.rect.top + this.rect
+																			.height);
+																		cloneList[key].rect.top = this
+																			.rect
+																			.top;
+																		top = this.rect.top + item.rect
+																			.height + difference;
+																		cloneRectTop = this.rect.top +
+																			item
+																			.rect.height + difference;
+																	}
+																}
+															}
+															// 将目标卡片的top赋值给相邻卡片											
+															let data = cloneDeep(this.rectList[i]);
+															data.rect.top = top;
+															newRectList.push(data);
+														} else {
+															// 拖拽卡片没有相邻卡片
+															console.log("拖拽卡片没有相邻卡片")
+															let difference = 0;
+															if (this.rect.top > item.rect.top) {
+																// 拖拽卡片top大于目标卡片
+																console.log("拖拽卡片top大于目标卡片")
+																difference = this.rect.top - (item.rect
+																	.top + item.rect.height);
+																cloneList[key].rect.top = item.rect
+																	.top + this.rect.height +
+																	difference;
+															} else {
+																// 拖拽卡片top小于目标卡片
+																console.log("拖拽卡片top小于目标卡片")
+																difference = item.rect.top - (this.rect
+																	.top + this.rect.height);
+																cloneList[key].rect.top = this.rect
+																	.top;
+																cloneRectTop = this.rect.top + item
+																	.rect.height + difference;
+															}
+														}
+													} else if (this.rect.height == item.rect.height) {
+														// 拖拽卡片高度等于目标卡片的高度
+														console.log("拖拽卡片高度等于目标卡片的高度")
+														const i = this.rectList.findIndex(v => v.rect
+															.top == this.rect.top && v.id != this
+															.id)
+														if (i != -1) {
+															// 拖拽卡片有相邻卡片
+															console.log("拖拽卡片有相邻卡片")
+															let data = cloneDeep(this.rectList[i]);
+															data.rect.top = item.rect.top;
+															newRectList.push(data);
+														} else {
+															// 拖拽卡片没有相邻卡片
+														}
+													} else {
+														// 拖拽卡片高度大于目标卡片的高度
+													}
+												}
+											})
+											const array = [...cloneList, ...newRectList];
+											// console.log(array)
+											// 同步当前卡片的RECT
+											this.rect.top = cloneRectTop;
+											this.rect.left = cloneRecLeft;
+											uni.$emit("watchCardLongpress", {
+												type: "synchronization_rect",
+												rect: this.rect,
+												cardId: this.id
+											});
+
+											array.forEach((item, key) => {
+												const data = {
+													x: item.rect.left,
+													y: item.rect.top,
+													id: item.id
+												}
+												// 异步
+												uni.$emit("watchCardAndParentCommunication", {
+													type: "setCardCoordinate",
+													data: data
+												})
+											})
+											cloneList = [];
+											newRectList = [];
+										}
+										if (!flag) {
+											this.isHandleCoincidence = false;
+											this.isHandleSort = false
+											// uni.log("没有检测到碰撞");
+										} else {
+											// 延迟15ms
+											// 处理结束
+											this.isHandleSort = false
+											setTimeout(() => {
+												this.isHandleCoincidence = false;
+												// uni.log(JSON.stringify(this.rectListCopy));
+											}, 320)
+											// uni.log("检测到碰撞");
+										}
+									}).catch(err => {
+										this.isHandleCoincidence = false;
+										this.isHandleSort = false
+										// uni.log("没有检测到碰撞");
+									}).finally(res => {})
+								// uni.log("计算处理后的时间：",uni.dayjs().valueOf())
+							}
+						} else {}
+					})
+				}
+			},
+			// 触摸结束
+			touchend() {
+				uni.log('touch end')
+				this.touches = false;
+				this.touchstartX = 0;
+				this.touchstartY = 0;
+				// 通知主窗口，解除上下滑动限制
+				uni.$emit("watchCardLongpress", {
+					type: "release_slide_limit",
+					cardSlide: false,
+					cardId: this.id
+				})
+				if (this.main_binding != null) {
+					// 解除卡片pan表达式绑定
+					bindingx.unbind({
+						token: this.main_binding.token,
+						eventType: 'pan'
+					});
+					this.main_binding = null;
+				}
+				if (this.isTouchmove === true) {
+					this.isLongpress = false;
+					this.isTouchmove = false;
+					this.longpressEnd = false;
+					// 卡片拖拽中是否碰撞到重合的卡片
+					if (this.isCardCoincidence === true) {
+						// 卡片过渡到替换的位置
+						this.dragX = this.rect.left;
+						this.dragY = this.rect.top;
+						this.regressionAm().then(res=>{
+							// 降低卡片层级
+							this.elevation = "0px";
+							this.isCardCoincidence = false;
+						})
+					} else {
+						this.regressionAm();
+					}
+				}
+			},
+			// 原始偏移回归动画
+			regressionAm(x=0,y=0,duration=300,delay=0,timingFunction='easeOutQuad'){
+				return new Promise((reslove,reject)=>{
+					animation.transition(this.$refs.card, {
+						needLayout: true,
+						transformOrigin: 'center center',
+						styles: {
+							transform: "translate(" + x + "px," + y + "px)"
+						},
+						duration: duration, //ms
+						timingFunction: timingFunction,
+						delay: delay //ms
+					}, () => {
+						reslove()
+					})
+				})
+			},
+			/**
+			 *校验当前卡片的坐标是否与其他卡片重合
+			 * @param {Number} dragX 拖拽卡片X轴坐标
+			 * @param {Number} dragY 拖拽卡片Y轴坐标
+			 * @param {Array} rectList 所有卡片的rect数组 
+			 * */
+			checkCoordinateCoincidence(dragX, dragY, rectList) {
+				return new Promise((resolve, reject) => {
+					// 重合的卡片数组
+					let cList = [];
+					// 排除拖拽的卡片
+					const a = {
+						left: dragX,
+						top: dragY,
+						width: this.rect.width,
+						height: this.rect.height
+					}
+					// 重合计算
+					rectList.forEach((item, key) => {
+						let res = this.hitTest(a, item.rect)
+						if (this.id != item.id && res.intersect && res.coincidence) {
+							cList.push({
+								...item,
+								...res
+							});
+						}
+					})
+					if (cList.length > 0) {
+						resolve(cList)
+					} else {
+						reject()
+					}
+				})
+			},
+			/**
+			 * 卡片重合检测
+			 * 算法逻辑：判断两个卡片的任意一边是否有间距
+			 * @param {Object} source 拖拽卡片{top,left,width,height}
+			 * @param {Object} target 目标卡片{top,left,width,height}
+			 * */
+			hitTest(source, target) {
+				let intersect = false; //是否相交
+				let coincidence = false; //是否重合
+				let direction = ""; //拖拽卡片相对于目标卡片的方向
+				if (source.left + source.width < target.left || source.top + source.height < target.top ||
+					source.left > target.left + target.width || source.top > target.top + target.height) {
+					intersect = false;
+				} else {
+					intersect = true;
+					// 方向
+					if (this.rect.left < target.left) {
+						direction = "left";
+						if (source.left > target.left) {
+							coincidence = true
+						}
+					} else if (this.rect.left > target.left) {
+						direction = "right";
+						if (source.left < target.left) {
+							coincidence = true
+						}
+					}
+					if (this.rect.top < target.top) {
+						direction = "top";
+						if (source.top > target.top) {
+							coincidence = true
+						}
+					} else if (this.rect.top > target.top) {
+						direction = "bottom";
+						if (source.top < target.top) {
+							coincidence = true
+						}
+					}
+				}
+				return {
+					intersect: intersect,
+					direction: direction,
+					coincidence: coincidence
+				}
+			},
+			// 计算卡片移动距离
+			calculationMoveDistance(option) {
+				const lx = Math.abs(option.size.left - this.rect.left);
+				const ly = Math.abs(option.size.top - this.rect.top);
+				if (lx > 0 && lx > ly) {
+					return lx
+				} else if (ly > 0 && ly > lx) {
+					return ly
+				}
+			},
+			createGlobalEvent() {
+				// 监听主页面和其他卡片触发的事件
+				uni.$on("watchCardAndParentCommunication", (res) => {
+					if (res.type == "setCardCoordinate" && res.data.id == this.id) {
+						// translate 偏移量
+						let tx = this.rect.left > res.data.x ? -(this.rect.left - res.data.x) : res.data.x - this
+							.rect
+							.left;
+						let ty = this.rect.top > res.data.y ? -(this.rect.top - res.data.y) : res.data.y - this
+							.rect
+							.top;
+						let card = this.$refs.card;
+
+						// 动画偏移
+						this.regressionAm(tx, ty, 300).then(response => {
+							// 更新卡片坐标
+							// console.log("33333")
+							this.rect.left = this.dragX = res.data.x;
+							this.rect.top = this.dragY = res.data.y;
+							// 动画偏移为0
+							uni.$emit("watchCardLongpress", {
+								type: "synchronization_rect",
+								rect: this.rect,
+								cardId: this.id
+							});
+							this.regressionAm(0, 0, 1,0,"easeOutQuart")
+						})
+					} else if (res.type == "resetElevation" && res.id == this.id) {
+						this.elevation = "0px";
+						this.isLongpress = false;
+					}
+				})
+			},
+			/**
+			 * weex bindingx 动画
+			 * @param {Number} beginX 起始X
+			 * @param {Number} beginY 起始Y
+			 * @param {Number} changeByX 属性变化值X
+			 * @param {Number} changeByY 属性变化值Y
+			 * @param {Number} duration 动画时长
+			 * @return {Function} Promise
+			 * */
+			bindingxAnimation(beginX, beginY, changeByX, changeByY, duration) {
+				return new Promise((resolve, reject) => {
+					let translateX = "linear(t," + beginX + "," + changeByX + "," + duration + ")";
+					let translateY = "linear(t," + beginY + "," + changeByY + "," + duration + ")";
+					let token = bindingx.bind({
+						eventType: 'timing',
+						exitExpression: 't>' + duration,
+						props: [{
+							element: this.getEl(this.$refs.card),
+							property: 'transform.translateX',
+							expression: translateX
+						}, {
+							element: this.getEl(this.$refs.card),
+							property: 'transform.translateY',
+							expression: translateY
+						}]
+					}, response => {
+						if (response.state === 'exit') {
+							bindingx.unbind({
+								token: token,
+								eventType: 'timing'
+							})
+							resolve(response)
+						}
+					});
+				})
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.rect-tips {
+		position: absolute;
+		background-color: #ccc;
+
+		.id {
+			color: green;
+		}
+
+		.top {
+			color: black;
+		}
+
+		.left {
+			color: red;
+		}
+	}
+
+	.card {
+		// flex-direction: column;
+		// align-items: center;
+		// justify-content: center;
+		// border: 1px solid red;
+	}
+
+	.mask-layer {
+		position: absolute;
+		top: 0;
+		left: 0;
+		// background-color: red;
+	}
+</style>

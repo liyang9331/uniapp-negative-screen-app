@@ -1,0 +1,106 @@
+<template>
+	<view class="card-operation" :class="isShow?'content':''" ref="operation" :style="style">
+		<text>{{content}}</text>
+	</view>
+</template>
+
+<script>
+	const dom = uni.requireNativePlugin('dom')
+	// animation模块可以用来在组件上执行动画
+	const animation = uni.requireNativePlugin('animation')
+	export default {
+		name: "app-list-menu",
+		props: {
+			cardLayoutHeight: {
+				type: [Number]
+			},
+			dragX: {
+				type: [Number]
+			},
+			dragY: {
+				type: [Number]
+			},
+			content: {
+				type: String,
+				default: '移除'
+			}
+		},
+		data() {
+			return {
+				style: {},
+				isShow: false,
+				width: 0,
+				height: 0,
+				initTime: 0
+			};
+		},
+		created() {},
+		mounted() {
+			setTimeout(() => {
+				dom.getComponentRect(this.$refs.operation, option => {
+					this.width = option.size.width;
+					this.height = option.size.height;
+					if (this.dragY - option.size.height > 40) {
+						// 操作窗口置于卡片顶部
+						this.style = {
+							top: this.dragY - 20 - option.size.height + 'px',
+							left: this.dragX + 'px'
+						}
+					} else {
+						// 操作窗口置于卡片底部
+						this.style = {
+							top: this.dragY + this.cardLayoutHeight + 20 + 'px',
+							left: this.dragX + 'px'
+						}
+					}
+					this.initTime = uni.dayjs().valueOf()
+					this.isShow = true;
+					setTimeout(()=>{
+						this.runAnimation()
+					},20)
+				})
+			}, 20)
+		},
+		updated() {
+		},
+		computed: {},
+		methods:{
+			runAnimation(){
+				animation.transition(this.$refs.operation, {
+					styles: {
+						width: this.width + 10,
+						height: this.height + 10,
+					},
+					duration: 200, //ms
+					timingFunction: 'ease',
+					needLayout: false,
+					delay: 0 //ms
+				}, () => {
+					animation.transition(this.$refs.operation, {
+						styles: {
+							width: this.width,
+							height: this.height,
+						},
+						duration: 200, //ms
+						timingFunction: 'ease',
+						needLayout: false,
+						delay: 0 //ms
+					}, () => {})
+				})
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.card-operation {
+		width: 350rpx;
+		height: 100rpx;
+		position: fixed;
+		border-radius: 20rpx;
+	}
+
+	.content {
+		background-color: #fff;
+	}
+</style>

@@ -1,0 +1,153 @@
+<template>
+	<view class="card-operation" :class="isShow?'content':''" ref="operation" :style="style">
+		<view class="cell" @click="remove">
+			<u--image :src="removeIcon" width="56rpx" height="56rpx"></u--image>
+			<text style="margin-left: 10rpx;">移除</text>
+			<!-- 下划线 -->
+			<view class="underline">
+				
+			</view>
+		</view>
+		<view class="cell" @click="navigator">
+			<u--image :src="serviceIcon" width="56rpx" height="56rpx"></u--image>
+			<text style="margin-left: 10rpx;">服务市场</text>
+		</view>
+	</view>
+</template>
+
+<script>
+	const dom = uni.requireNativePlugin('dom')
+	// animation模块可以用来在组件上执行动画
+	const animation = uni.requireNativePlugin('animation')
+	export default {
+		name: "card-operation",
+		props: {
+			cardLayoutHeight: {
+				type: [Number]
+			},
+			id:{
+				type:[String,Number]
+			},
+			operationRect:{
+				type:[Object],
+				default:{}
+			}
+		},
+		data() {
+			return {
+				style: {
+					left:"-200px"
+				},
+				isShow: false,
+				width: 0,
+				height: 0,
+				initTime: 0,
+				removeIcon:require("@/static/image/remove.png"),
+				serviceIcon:require("@/static/image/service_market.png")
+			};
+		},
+		created() {},
+		watch:{
+			operationRect(val,oldVal){
+				if(Object.keys(val).length>0){
+					this.render();
+				}
+			}
+		},
+		mounted() {
+		},
+		updated() {
+		},
+		computed: {},
+		methods:{
+			render(){
+				dom.getComponentRect(this.$refs.operation, option => {
+					this.width = option.size.width;
+					this.height = option.size.height;
+					if (this.operationRect.top - option.size.height > 40) {
+						// 操作窗口置于卡片顶部
+						this.style = {
+							top: this.operationRect.top - 20 - option.size.height + 'px',
+							left: this.operationRect.left + 'px'
+						}
+					} else {
+						// 操作窗口置于卡片底部
+						this.style = {
+							top: this.operationRect.top + this.cardLayoutHeight + 20 + 'px',
+							left: this.operationRect.left + 'px'
+						}
+					}
+					this.initTime = uni.dayjs().valueOf()
+					this.isShow = true;
+					setTimeout(()=>{
+						this.runAnimation()
+					},20)
+				})
+			},
+			remove(){
+				// 通知父组件/页面移除遮罩层
+				this.$emit("remove")
+			},
+			navigator(){
+				this.$emit("remove")
+				uni.navigateTo({
+					url:'/pages/add-card/add-card',
+					success: (res) => {
+						
+					},
+					fail: (err) => {
+						console.log(err)
+					}
+				})
+			},
+			runAnimation(){
+				animation.transition(this.$refs.operation, {
+					styles: {
+						width: this.width + 10,
+						height: this.height + 10,
+					},
+					duration: 200, //ms
+					timingFunction: 'ease',
+					needLayout: false,
+					delay: 0 //ms
+				}, () => {
+					animation.transition(this.$refs.operation, {
+						styles: {
+							width: this.width,
+							height: this.height,
+						},
+						duration: 200, //ms
+						timingFunction: 'ease',
+						needLayout: false,
+						delay: 0 //ms
+					}, () => {})
+				})
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.card-operation {
+		width: 350rpx;
+		height: 180rpx;
+		position: fixed;
+		border-radius: 20rpx;
+		padding: 20rpx;
+		.cell{
+			flex-direction: row;
+			align-items: center;
+			flex-wrap: wrap;
+		}
+		.underline{
+			width: 240rpx;
+			margin: 10rpx 0 10rpx 70rpx;
+			height: 1px;
+			background-color: #ccc;
+		}
+	}
+
+	.content {
+		background-color: #fff;
+	}
+</style>

@@ -1,0 +1,21 @@
+#卡片接口返回数据格式
+对应卡片模版：S_text
+data:{
+		id:"",
+		title:"中国新闻",
+		date:"",//时间戳或者标准日期格式
+		content:"中国新闻中国新闻中国新闻中国新闻中国新闻中国新闻",
+		urlSchemes:"",//例如：sinaweibo://fragmentpage?containerid=102803&needlocation=1
+	}
+
+对应卡片模版：S_text_bar
+	data:{
+		title:"微博热搜",
+		list:[
+			{
+				id:"",
+				content:"电影奇迹收视预告",
+				urlSchemes:"",//例如：sinaweibo://fragmentpage?containerid=102803&needlocation=1
+			}
+		]
+	}

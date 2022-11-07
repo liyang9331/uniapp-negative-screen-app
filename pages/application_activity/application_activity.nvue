@@ -1,0 +1,532 @@
+<template>
+	<view class="page" :style="pageStyle">
+		<image class="wallpaper" src="../../static/image/application.png" :style="wallpaperStyle"></image>
+		<scroll-view @click="info" @scroll="scroll" class="content" ref="page" :style="pageStyle" scroll-y="true">
+			<view :style="{ height: statusBarHeight + 'px', width: '690rpx' }" />
+			<searchBar :needComponents="['arr']" arrBtn="../../static/image/arrow-leftward.png" :setStyle="{
+					position: 'fixed',
+					top: statusBarHeight + 'px',
+					left: '30rpx'
+				}" @goBack="goBack" />
+			<searchBar :needComponents="[]" />
+			<!-- 元素包裹 -->
+			<view class="drag-layout" ref="dragLayout">
+				<view class="title">
+					<u--text text="快捷入口" align="left" bold="true" size="34rpx" :lines="1" color="#a9aeb4" />
+				</view>
+				<AppQuickNeed :dragLayoutRect="dragLayoutRect" :dragAppRendering="dragAppRendering"
+					:removeData="removeData" color="#fff" v-for="(item, index) in quickEntry" :id="item.appId"
+					:key="item.appId" :index="index" :itemData="item" :text="item.appName" :imageSrc="item.appLogoPic"
+					:pageHeight="pageHeight" :maskShow="maskShow" :allowDrag="false" :rectList="rectList"
+					:activeCardId="activeCardId" @into_app="into_app(quickEntry[index])" />
+				<AppQuickNeed :dragLayoutRect="dragLayoutRect" :rectList="rectList" :id="-1"
+					:dragAppRendering="dragAppRendering" :maskShow="maskShow" :removeData="removeData"
+					:pageHeight="pageHeight" :static="true" />
+			</view>
+			<view elevation="0px" class="no-drag-layout">
+				<appQuickTitle color="#a9aeb4" v-if="recentUse.length > 0" style="width: 680rpx;" key="2"
+					:title="'最近使用'" />
+
+				<view class="column">
+					<AppQuick color="#fff" v-for="(item, index) in recentUse" :id="item.appId" :key="index"
+						:itemData="item" :text="item.appName" :imageSrc="item.appLogoPic" :maskShow="maskShow"
+						:allowDrag="true" :rectList="[]" :activeCardId="activeCardId"
+						@into_app="into_app(recentUse[index])" />
+				</view>
+
+				<view class="column" v-for="(item,key) in list" :key="key">
+					<text class="column__title" style="color:#a9aeb4;">{{item.columnName}}</text>
+					<AppQuick color="#fff" v-for="(items, index) in item.list" :id="items.appId" :key="index"
+						:itemData="items" :text="items.appName" :imageSrc="items.appLogoPic" :maskShow="maskShow"
+						:allowDrag="true" :rectList="[]" :activeCardId="activeCardId" @into_app="into_app(items)" />
+				</view>
+			</view>
+
+			<view v-if="isTipsShow" class="tips" @click="add_entry" elevation="3px"
+				:style="{top:tipsStyle.top+'px',left:tipsStyle.left+'px'}">
+				<u-icon name="plus-circle" label="添加至快捷入口"></u-icon>
+				<!-- <text style="font-size: 32rpx;">添加至快捷入口</text> -->
+			</view>
+
+			<view v-if="isTipsShow_remove" class="tips_remove" @click="remove_entry" elevation="3px"
+				:style="{top:tipsStyle.top +'px',left:tipsStyle.left + 30 +'px'}">
+				<u-icon name="minus-circle" label="移除"></u-icon>
+				<!-- <text style="font-size: 32rpx;">添加至快捷入口</text> -->
+			</view>
+		</scroll-view>
+		<view>
+			<u-popup :show="show" :round="100" mode="center" @close="close" @open="open">
+				<view class="popup__box">
+					<text class="popup__content">{{popupContent}}</text>
+				</view>
+			</u-popup>
+		</view>
+		<!-- 遮罩层 -->
+		<view elevation="0.2px" ref="maskLayer" class="mask-layer" v-if="maskShow" @click="pageClickHandle"
+			:style="pageStyle"></view>
+	</view>
+
+</template>
+
+<script>
+	import applet from '@/mixins/applet-compatibility'
+	import searchBar from '@/components/search-bar/search-bar'
+	import AppQuick from '@/components/app-quick/app-quick'
+	import appQuickTitle from '@/components/app-quick-title/app-quick-title'
+	import appQuickTitleNeed from '@/components/app-quick-title/app-quick-title-need'
+	import applicationCategory from '@/components/app-application-category/app-application-category'
+	import appListMenu from '@/components/app-list-menu/app-list-menu'
+	import AppQuickNeed from '@/components/app-quick-need/app-quick-need'
+	import {
+		application
+	} from '@/api/application.js'
+	const dom = uni.requireNativePlugin('dom')
+	import storage from "@/utils/storage.js"
+	import {
+		launchApplication,
+		isApplicationExist
+	} from '@/utils/nativeAPI.js'
+	import {
+		getColumnList
+	} from "@/api/column.js"
+	import cloneDeep from "lodash.clonedeep"
+	import {
+		resolveDirective
+	} from "vue"
+	export default {
+		components: {
+			searchBar,
+			AppQuick,
+			appQuickTitle,
+			applicationCategory,
+			appQuickTitleNeed,
+			appListMenu,
+			AppQuickNeed
+		},
+		mixins: [applet],
+		data() {
+			return {
+				show: false,
+				init_page: false, // 初始化页面
+				refresh: true,
+				cardSlide: false,
+				pageHeight: 0,
+				maskShow: false,
+				rectList: [], //卡片模型rect数组
+				quickly_app: [],
+				activeCardId: "", //激活的卡片id
+				is_into_app: true, // 判断是否进入APP还是唤出菜单
+				newposition: '',
+				dragX: 0,
+				dragY: 0,
+				quickEntry: [],
+				choseData: {}, //选择的应用
+				removeData: {}, //待移除的应用
+				column: [], // 普通栏目
+				pictureColumn: [], // 图片栏目
+				videoColumn: [], // 视频栏目
+				musicColumn: [], // 音频栏目
+				recentUse: [],
+				list: [],
+				isTipsShow: false,
+				isTipsShow_remove: false,
+				tipsStyle: {
+					top: 0,
+					left: 0
+				},
+				scrollTop: 0,
+				elevation: "0px",
+				isRander: true, //是否渲染
+				popupContent: '请勿重复添加',
+				dragAppRendering: false, //拖拽app组件是否渲染
+				dragLayoutRect: {}, //拖拽区域整体rect
+			}
+		},
+		computed: {
+			// 主窗口动态样式
+			pageStyle() {
+				return {
+					height: uni.$store.state.systemInfo.windowHeight + 'px'
+				}
+			},
+			wallpaperStyle() {
+				return {
+					width: 750 + 'rpx',
+					height: uni.$store.state.systemInfo.windowHeight + 'px'
+				}
+			},
+			noDragLayoutStyle() {
+				if (this.quickEntry.length == 0) {
+					return {
+						marginTop: '0rpx'
+					}
+				} else {
+					return {
+						marginTop: '180rpx'
+					}
+				}
+			}
+		},
+		onLoad() {
+			this.createdEventGlobal();
+			this.getAppInfo().then(res => {
+				// 从本地获取应用快捷入口
+				this.quickEntry = storage.get('quickEntry') || [];
+				this.recentUse = storage.get('appRecentUse') || [];
+				// 获取初始化渲染时页面的高度
+				this.$nextTick(() => {
+					dom.getComponentRect(this.$refs.dragLayout, res => {
+						this.dragLayoutRect = res.size;
+						dom.getComponentRect(this.$refs.page, option => {
+							this.dragAppRendering = true;
+							this.pageHeight = option.size.height;
+						})
+					})
+				})
+			}).catch(err => {
+
+			})
+		},
+		onReady() {
+			// console.log("main activity Ready:", uni.dayjs().valueOf())
+		},
+		onUnload() {
+			uni.$off("sendNewCard");
+			uni.$off("watchCardLongpress_1");
+			uni.$off("card_start_touchmove")
+		},
+		watch: {},
+		methods: {
+			pageClickHandle() {
+				this.maskShow = false;
+				this.isTipsShow = false;
+				this.isTipsShow_remove = false;
+			},
+			open() {
+				this.show = true
+				// console.log('open');
+			},
+			close() {
+				this.show = false
+				// console.log('close');
+			},
+			createdEventGlobal() {
+				uni.$on("sendNewCard", (res) => {
+					this.newposition = res
+				})
+				// 主窗口和卡片模型通信
+				uni.$on("watchCardLongpress_1", (res) => {
+					switch (res.type) {
+						case "release_slide_limit":
+							this.cardSlide = res.cardSlide;
+							this.activeCardId = res.cardId;
+							break;
+						case "card_longpress":
+							this.cardSlide = res.cardSlide;
+							this.maskShow = res.maskShow;
+							this.activeCardId = res.cardId;
+							break;
+						case "card_start_touchmove":
+							this.isTipsShow_remove = res.maskShow
+							this.maskShow = res.maskShow;
+							// this.activeCardId = res.cardId;
+							break;
+						case "synchronization_rect":
+							const key = this.rectList.findIndex(v => v.id == res.id)
+							this.isTipsShow_remove = res.maskShow
+							if (key != -1) {
+								this.rectList[key].rect = res.rect;
+							} else {
+								this.rectList.push({
+									id: res.id,
+									rect: res.rect
+								})
+							}
+							break;
+						case "open_remove_popup":
+							let v = res.rect;
+							let vw = uni.$store.state.systemInfo.windowWidth;
+							let left = v.left;
+							this.tipsStyle = {
+								top: v.top - 50 - this.scrollTop,
+								left: left < 50 ? 0 : vw - left < 150 ? left - (150 - (vw - left)) : left - (v.width / 2)
+							}
+							this.maskShow = res.maskShow;
+							this.isTipsShow_remove = res.maskShow;
+							this.choseData = res.cardData;
+							break;
+						case "close_remove_popup":
+							// console.log(res.maskShow);
+							this.maskShow = res.maskShow;
+							this.isTipsShow_remove = res.maskShow;
+							break;
+						case "open_add_popup":
+							v = res.rect;
+							vw = uni.$store.state.systemInfo.windowWidth;
+							this.tipsStyle = {
+								top: v.top - 50 - this.scrollTop,
+								left: v.left < 50 ? 0 : vw - v.left < 150 ? v.left - (150 - (vw - v.left)) : v
+									.left - (v.width / 2)
+							}
+							this.maskShow = res.maskShow;
+							this.isTipsShow = res.maskShow;
+							this.choseData = res.cardData;
+							break;
+						case "close_add_popup":
+							this.maskShow = res.maskShow;
+							this.isTipsShow = res.maskShow;
+							break;
+					}
+				})
+			},
+			scroll(event) {
+				this.scrollTop = event.detail.scrollTop
+			},
+			goBack() {
+				uni.navigateBack({
+					delta: 1,
+					success: () => {}
+				})
+			},
+			// 点击添加到快捷入口
+			add_entry() {
+				// 深度克隆quickEntry
+				let list = cloneDeep(this.quickEntry);
+				let flag = false;
+				// 查找添加的应用是否存在于快捷入口中
+				if (list.findIndex(v => v.appId == this.choseData.appId) == -1) {
+					// 不存在
+					// 检测快捷入口是否已满员
+					if (list.length < 4) {
+						// 未满员
+						list.push(this.choseData);
+						flag = true;
+					} else {
+						//已满员，替换最后一位
+						// list[list.length - 1] = this.choseData
+						// flag = true;
+						this.popupContent = '快捷入口已满，请先删除'
+						this.show = true
+					}
+				} else {
+					//已存在
+					this.popupContent = '请勿重复添加'
+					this.open()
+				}
+				if (flag) {
+					storage.set('quickEntry', list);
+					this.isRander = false;
+					this.dragAppRendering = false;
+					this.quickEntry = list;
+					this.maskShow = false;
+					setTimeout(()=>{
+						this.dragAppRendering = true;
+					},100)
+					storage.set('quickEntry', list).then(res => {
+						uni.$emit('watchAppQuickList')
+					})
+				}
+				this.isTipsShow = false
+			},
+			// 移除出快捷入口
+			remove_entry() {
+				let list = this.quickEntry.filter(item => item.appId != this.choseData.appId);
+				this.isTipsShow_remove = false;
+				this.maskShow = false;
+				this.removeData = this.choseData;
+				this.quickEntry = list;
+				setTimeout(() => {
+					this.removeData = {};
+					this.rectList = this.rectList.filter(v => v.id != this.choseData.appId);
+					storage.set('quickEntry', list).then(res => {
+						uni.$emit('watchAppQuickList')
+					})
+				}, 50)
+			},
+			// 触摸遮罩层
+			tapMask() {
+				console.log("tap mask")
+				this.maskShow = false;
+				uni.$emit("watchCardAndParentCommunication", {
+					type: "resetElevation",
+					id: this.activeCardId
+				})
+			},
+			// 点击进入应用
+			into_app(obj) {
+				// 清除快捷入口
+				// storage.remove('quickEntry')
+				if (obj.appPackage != '') {
+					this.saveRecentUse(obj)
+
+					launchApplication(obj.appPackage, {}, () => {})
+					this.is_into_app = true
+				}
+			},
+			// 设置并保存点进去的APP
+			saveRecentUse(obj) {
+				const data = storage.get('appRecentUse') || [];
+				let arr = []
+				if (data === null) {
+					arr.push(obj)
+				} else {
+					arr = data
+					arr = arr.filter(item => {
+						return item.appName !== obj.appName
+					})
+					arr.unshift(obj)
+					arr.length = arr.length > 5 ? 5 : arr.length
+				}
+				storage.set('appRecentUse', arr);
+			},
+			// 点击换出菜单
+			showMenu(index) {
+				dom.getComponentRect(this.$refs.menu, options => {
+					this.menuH = options.size.height
+				})
+				this.is_into_app = false
+			},
+			// 请求应用信息得到数据
+			getAppInfo() {
+				return new Promise((resolve, reject) => {
+					getColumnList({}).then(res => {
+						let list = res.data.rows.map(item => {
+							return {
+								...item,
+								list: []
+							}
+						})
+						application({}).then(res => {
+							let data = res.data.rows
+							data.forEach(item => {
+								list.forEach((items, key) => {
+									if (item.columnName == items.columnName) {
+										if (isApplicationExist(item.appPackage)) {
+											list[key].list.push(item)
+										}
+									}
+								})
+							})
+							this.list = list.filter(item => {
+								return item.list.length !== 0
+							})
+							resolve()
+						}).catch(err => {
+							// console.log('出错了', err)
+							reject()
+						})
+					}).catch(err => {
+						reject()
+					})
+				})
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.drag-layout {
+		width: 690rpx;
+		height: 280rpx;
+		position: relative;
+		flex-direction: row;
+		flex-wrap: wrap;
+		// border: 1px solid red;
+		.title {
+			width: 690rpx;
+			height: 50rpx;
+			position: relative;
+			// border: 1px solid green;
+			margin-bottom: 30rpx;
+		}
+	}
+
+	.fill-layer {
+		width: 750rpx;
+		height: 180rpx;
+		// background-color: red;
+	}
+
+	.page {
+		width: 750rpx;
+		position: relative;
+		// background-color: red;
+	}
+
+	.mask-layer {
+		position: absolute;
+		width: 750rpx;
+		// background-color: red;
+		// border: 1px solid red;
+	}
+
+	.wallpaper {
+		position: absolute;
+	}
+
+	.content {
+		padding: 0 30rpx 0 30rpx;
+		width: 750rpx;
+		flex-direction: row;
+		flex-wrap: wrap;
+		position: absolute;
+
+		.application {
+			width: 155rpx;
+			height: 160rpx;
+
+			.applicationImage {
+				margin: 0 27rpx;
+			}
+		}
+
+		.column {
+			width: 750rpx;
+			flex-direction: row;
+			flex-wrap: wrap;
+
+			&__title {
+				font-size: 34rpx;
+				font-weight: bold;
+				padding: 0 0 36rpx 0;
+				width: 680rpx;
+			}
+		}
+
+	}
+
+	.popup__box {
+		// height: 100rem;
+		// width: 200rem;
+		border-radius: 20rpx;
+		background-color: #f2f2f2;
+	}
+
+	.popup__content {
+		padding: 40rem 40rem;
+	}
+
+	.tips {
+		padding: 30rpx;
+		border-radius: 30rpx;
+		color: #666;
+		background-color: #fff;
+		position: fixed;
+		align-items: center;
+		justify-content: center;
+		height: 50px;
+		width: 150px;
+	}
+
+	.tips_remove {
+		padding: 30rpx;
+		border-radius: 30rpx;
+		color: #666;
+		background-color: #fff;
+		position: fixed;
+		align-items: center;
+		justify-content: center;
+		height: 50px;
+		width: 80px;
+	}
+</style>

@@ -1,0 +1,131 @@
+<template>
+	<view>
+		<searchResultBox v-if="messageInfo.length > 0" title="消息">
+			<view v-for="(item, index) in messageInfo" :key="index" class="messageItem" @click="into_messageDetail(item)">
+				<view class="messageItemIcon"/>
+				<u--text :text="item.content" lines="1" size="28" color="#333" />
+				<text class="messageItemTime">
+					{{item.gmtCreate | filter_time}}
+				</text>
+			</view>
+		</searchResultBox>
+		<searchResultBox v-if="application.length > 0" title="应用">
+			<view v-for="(item, index) in application" :key="index" class="application" @click="into_app(item.appPackage)">
+				<u--image
+					:src="item.src"
+					class="applicationImage"
+					shape="circle"
+					width="100rpx"
+					height="100rpx"
+				/>
+				<u--text
+					:text="item.appName"
+					size="26"
+					align="center"
+				/>
+			</view>
+		</searchResultBox>
+		<searchResultNot
+			v-if="messageInfo.length === 0 && application.length === 0"
+			src="/static/search_image/search-not-find.png"
+			content="暂无搜索信息~"
+		/>
+	</view>
+</template>
+
+<script>
+import searchResultBox from "@/components/search-result-box/search-result-box"
+import searchResultNot from "@/components/search-result-not/search-result-not"
+import { launchApplication } from "@/utils/nativeAPI.js"
+import { getInformationDetail } from '@/api/application.js'
+	export default {
+		name:"searchResult",
+		components: { searchResultBox, searchResultNot },
+		filters: {
+			filter_nums(value){
+				if(value){
+					return value
+				}else{
+					let key = value.slice(0,16)
+					return key + '...'
+				}
+			},
+			filter_time(value){
+				let t = uni.dayjs(uni.dayjs(value).format('YYYY-MM-DD HH:mm:ss')).fromNow()
+				return t
+			}
+		},
+		props:{
+			messageInfo:{
+				type: Array,
+				default: [{}]
+			},
+			application:{
+				type: Array,
+				default: [{}]
+			}
+		},
+		data() {
+			return {
+			}
+		},
+		methods:{
+			// 转换时间
+			filter_time(value){
+				let t = uni.dayjs(uni.dayjs(value).format('YYYY-MM-DD HH:mm:ss')).fromNow()
+				return t
+			},
+			// 进入APP系统
+			into_app(pname){
+				launchApplication(pname)
+			},
+			into_messageDetail(item){
+				getInformationDetail(item.notifyId).then(res => {
+					console.log('微博内容为', res)
+					console.log('搜索返回的数据为', item)
+					res.data.data.appPackage = item.appPackage
+					res.data.data.jumpPath = item.appDetailUrl
+					res.data.data.appLogoPic = item.appLogo
+					res.data.data.pushTime = this.filter_time(res.data.data.pushTime)
+					setTimeout(()=>{
+						uni.$emit('information', {data: res.data.data })
+					},200)
+				})
+				uni.navigateTo({
+					url: '/pages/information-detail/information-detail'
+				})
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.messageItem{
+	width: 622rpx;
+	height: 37rpx;
+	margin: 20rpx 0 20rpx 0;
+	flex-direction: row;
+	justify-content: space-between;
+	
+	.messageItemIcon{
+		width: 12rpx;
+		height: 12rpx;
+		font-size: 28rpx;
+		background-color: #666;
+		margin: 12rpx 20rpx 0 0;
+		border-radius: 50%;
+	}
+	.messageItemTime{
+		font-size: 26rpx;
+		color: #666;
+	}
+}
+.application{
+	width: 155rpx;
+	height: 160rpx;
+	
+	.applicationImage{
+		margin: 0 0 0 25rpx;
+	}
+}
+</style>

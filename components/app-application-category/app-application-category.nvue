@@ -1,0 +1,82 @@
+<template>
+	<view class="main" :style="outstyle" ref="box">
+		<text class="title">{{ title }}</text>
+		<view class="content">
+			<slot></slot>
+		</view>
+	</view>
+</template>
+
+<script>
+const dom = uni.requireNativePlugin('dom')
+	export default {
+		name:"ApplicationCategory",
+		props:{
+			title:{
+				type: String,
+				default: '标题'
+			},
+			pageHeight:{
+				type: [Number]
+			}
+		},
+		data() {
+			return {
+				x: 0,
+				y: 0,
+				init: false
+			};
+		},
+		watch: {
+			pageHeight(newVal, oldVal) {
+				if (newVal != 0) {
+					this.init = true
+					// console.log(this.x,this.y)
+				}
+			}
+		},
+		computed:{
+			outstyle(){
+				if( this.init === true ){
+					return {
+						position: "absolute",
+						top: this.y + 'px',
+						left: this.x + 'px'
+					}
+				}
+			}
+		},
+		mounted(){
+			setTimeout(()=>{
+				dom.getComponentRect(this.$refs.box, option => {
+					console.log(option)
+					this.x = option.size.left;
+					this.y = option.size.top;
+					// this.init = true
+				})
+				
+			},15)
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.main{
+	width: 690rpx;
+	margin: 0 0 30rpx 0;
+	
+	.title{
+		font-size: 34rpx;
+		font-weight: bold;
+		padding: 0 0 36rpx 0;
+	}
+	.content{
+		width: 682rpx;
+		background-color: #fff;
+		border-radius: 30rpx;
+		padding: 30rpx;
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+}
+</style>

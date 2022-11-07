@@ -1,0 +1,44 @@
+<template>
+	<view class="box">
+		<u--image
+			:src="src"
+			class="image_top"
+			width="360rpx"
+			height="360rpx"
+		/>
+		<u--text
+			:text="content"
+			size="26"
+			color="#999"
+		/>
+	</view>
+</template>
+
+<script>
+	export default {
+		name:"searchResultNot",
+		props:{
+			src:{
+				type: String
+			},
+			content:{
+				type: String
+			}
+		},
+		data() {
+			return {
+				
+			};
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.box{
+	align-items: center;
+	
+	.image_top{
+		padding: 280rpx 0 0 0;
+	}
+}
+</style>

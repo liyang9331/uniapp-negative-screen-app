@@ -1,0 +1,45 @@
+<template>
+	<view class="main">
+		<text class="title">{{ title }}</text>
+		<view class="content">
+			<slot></slot>
+		</view>
+	</view>
+</template>
+
+<script>
+	export default {
+		name:"searchResultBox",
+		props:{
+			title:{
+				type: String,
+				default: '标题'
+			}
+		},
+		data() {
+			return {
+				
+			};
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.main{
+	padding: 0 0 50rpx 0;
+	
+	.title{
+		font-size: 34rpx;
+		font-weight: bold;
+		padding: 0 0 36rpx 0;
+	}
+	.content{
+		width: 682rpx;
+		background-color: #fff;
+		border-radius: 30rpx;
+		padding: 30rpx;
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+}
+</style>

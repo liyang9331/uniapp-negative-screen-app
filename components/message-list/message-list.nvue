@@ -1,0 +1,160 @@
+<template>
+	<view class="message-list" @click="into_information">
+		<view class="content">
+			<view class="message-list-item" v-for="(item,key) in messageList" :key="key"
+			:style="{marginBottom:key==messageList.length-1?'15rpx':'0rpx'}">
+				<view class="message-list-item-left">
+					<view class="round-dot"></view>
+					<view class="message-list-item-content">
+						<u--text :block="true" align="center" :lines="1" mode="text" size="28rpx" color="#fff" :text="item.notifyType === 1 ?
+							'系统推送:  ' + item.notifyName :
+							`${item.appName}推送:  ` + item.notifyName
+							"></u--text>
+					</view>
+				</view>
+				<view class="">
+					<u--text :block="true" align="center" mode="date" size="24rpx" 
+					color="rgba(220,220,220, 0.8)" :text="item.createTime"
+						:format="dateFormat"></u--text>
+				</view>
+			</view>
+		</view>
+		<view class="arrow-right">
+			<u-icon bold="true" color="rgba(220,220,220, 0.8)" name="arrow-right"></u-icon>
+		</view>
+	</view>
+</template>
+
+<script>
+	import {
+		getList
+	} from '@/api/application.js'
+	import {
+		isApplicationExist
+	} from '@/utils/nativeAPI.js'
+	export default {
+		name: "message-list",
+		data() {
+			return {
+				messageList: [],
+				total: 0, // 全部的数据
+				current: 1, // 目前的数据总量
+				getMsgNow: {
+					notifyName: '',
+					createTime: ''
+				}
+			};
+		},
+		created() {
+			this.getInformationData();
+			uni.$on("watchWebsocketMessage", res => {
+				this.onmessage(res)
+			})
+		},
+		mounted() {},
+		watch: {
+			getMsgNow(msg) {
+				this.messageList.pop(1)
+				this.messageList.unshift(this.getMsgNow)
+			}
+		},
+		beforeDestroy() {
+			uni.$off("watchWebsocketMessage")
+		},
+		methods: {
+			// 时间戳
+			dateFormat(res) {
+				const t = uni.dayjs(uni.dayjs(res).format("YYYY-MM-DD HH:mm:ss")).fromNow();
+				return "07月13日";
+			},
+			// 页面初始化时请求数据
+			getInformationData() {
+
+				getList(this.current).then(res => {
+					this.total = res.data.total
+					if (this.messageList.length >= 2) {
+						return
+					} else {
+						this.messageList = res.data.rows.filter(item => {
+							return item.notifyType === 1 || isApplicationExist(item.appPackage)
+						})
+						this.current += 1
+						this.getInformationData()
+					}
+				})
+
+			},
+			// 进入消息页面
+			into_information() {
+				uni.navigateTo({
+					url: '/pages/information/information?data=open'
+				})
+			},
+			// webSocket实现消息实时推送
+			onopen() {
+				// console.log('消息连接成功了!')
+			},
+			onmessage(data) {
+				try {
+					let key = JSON.parse(data)
+					console.log('key is ', key)
+					if (key.notifyType === 1 || isApplicationExist(key.appPackage)) {
+						this.getMsgNow = {
+							notifyName: key.notifyName,
+							notifyType: key.notifyType,
+							createTime: key.createTime,
+							appName: key.appName
+						}
+					}
+				} catch (e) {
+					console.log(data)
+				}
+			},
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.message-list {
+		margin-top: 30rpx;
+		border-radius: 30rpx;
+		flex-direction: row;
+		align-items: center;
+		padding: 15rpx 0;
+		background-color: rgba(255, 255, 255, 0.3);
+
+		.content {
+			width: 620rpx;
+			// border: 1px solid green;
+			.message-list-item {
+				margin-top: 15rpx;
+				display: flex;
+				flex-direction: row;
+				align-items: center;
+				justify-content: space-between;
+				.message-list-item-left{
+					flex-direction: row;
+					align-items: center;
+				}
+				.message-list-item-content{
+					width: 460rpx;
+					// border: 1px solid yellow;
+				}
+				.round-dot {
+					width: 6rpx;
+					height: 6rpx;
+					background-color: #fff;
+					border-radius: 50%;
+					margin: 0 15rpx 0 15rpx;
+				}
+			}
+		}
+
+		.arrow-right {
+			flex: 1;
+			flex-direction: row;
+			justify-content: center;
+			// border: 1px solid red;
+		}
+	}
+</style>

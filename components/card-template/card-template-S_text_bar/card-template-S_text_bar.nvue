@@ -1,0 +1,103 @@
+<template>
+	<view ref="card" class="card" :style="styles" @click="cardClickHandle">
+		<!-- 背景图 -->
+		<image style="position: absolute;top: 0;left: 0;border-radius: 20rpx;" v-if="card.cardBgPic!=''" :src="card.cardBgPic" :style="styles" mode=""></image>
+		<view class="content_1">
+			<u--image shape="circle" :src="card.cardLogoPic" width="55rpx" height="55rpx"></u--image>
+			<u--text :lines="1" style="margin-left: 20rpx;" :bold="true" :text="card.cardName" size="32rpx" color="#000000">
+			</u--text>
+		</view>
+		<view class="content_2">
+			<view class="list-item" v-for="(item,key) in message.list" :key="key"
+				@click.stop="iconHandle($event,{interface:item.urlSchemes})">
+				<u--text lines="1" class="title" :text="item.content" size="30rpx" color="#000000"></u--text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+	// 方形条目文字
+	import mixins from "../mixins.js"
+	export default {
+		name: "S_text_bar",
+		mixins: [mixins],
+		props: {
+			styles: {
+				type: [Object],
+				default: {
+					width: '330rpx',
+					height: '330rpx'
+				}
+			}
+		},
+		data() {
+			return {
+				rect: {},
+				message: {
+					title: "中国新闻",
+					list: [{
+						content: ""
+					}]
+				}
+			}
+		},
+		computed: {},
+		watch: {},
+		created() {},
+		mounted() {},
+		methods: {
+			request() {
+				this.card.cardLogoPic = this.insertDomainName("cardLogoPic");
+				if (this.isRun) {
+					this.api(this.card.cardInterface, {}).then(res => {
+						this.message = res.data;
+					}).catch(err => {
+
+					})
+				} else {
+					//添加卡片页面
+					const res = this.storage.get("S_text_bar"+this.card.cardId);
+					if (res != null) {
+						this.message = res;
+					} else {
+						this.api(this.card.cardInterface, {}).then(res => {
+							this.message = res.data;
+							this.storage.set("S_text_bar"+this.card.cardId, res.data)
+						}).catch(err => {
+
+						})
+					}
+				}
+			}
+		},
+		beforeDestroy() {}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.card {
+		padding: 30rpx 30rpx 0rpx 30rpx;
+		background-color: #ffffff;
+		border-radius: 30rpx;
+	}
+
+	.content_1 {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.content_2 {
+		margin-top: 30rpx;
+		height: 190rpx;
+		// border: 1px solid red;
+		& .list-item {
+			margin-bottom: 30rpx;
+			width: 290rpx;
+
+			& .icon {}
+
+			& .title {}
+		}
+	}
+</style>

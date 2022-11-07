@@ -1,0 +1,300 @@
+<template>
+	<view class="page" :style="pageStyle">
+		<!-- 填充状态栏 -->
+		<view :style="{height:statusBarHeight+'px'}"></view>
+		<view class="navbar">
+			<u--image @click="navigator" src="/static/image/arrow-leftward.png" width="46rpx" height="46rpx"></u--image>
+			<!-- <text class="title">添加小部件</text> -->
+			<!-- <u-icon name="arrow-leftward" size="50rpx" color="#ffffff"></u-icon> -->
+		</view>
+		<!-- 		<view class="" style="margin-top: 50rpx;">
+			<u--text text="出行" size="40rpx" color="#ffffff" align="center"></u--text>
+		</view>
+		<view class="" style="margin-top: 40rpx;">
+			<u--text text="品质安全,贴心便捷" size="40rpx" color="#bebebe" align="center"></u--text>
+		</view> -->
+		<view class="card-template-list" @touchmove="touchmove" @touchstart="touchstart" @touchend="touchend">
+			<card v-for="(item,index) in cardList" v-if="item.cardTmpl!=null" :key="index" :isRun="false"
+				:length="cardList.length" :cardData="item" :index="index"
+				:cardIndex="item.cardTmpl!=null?item.cardTmpl.tmplCode:false" :bottomRect="bottomRect"></card>
+		</view>
+		<!-- 底部遮盖 -->
+		<view class="bottom" ref="bottom">
+			<view :class="isAdd?'button-yes':'button-no'" @click="addCardToNegativeScreen">
+				<text class="title">{{isAdd?'已添加到负一屏':'添加到负一屏'}}</text>
+			</view>
+		</view>
+		<!-- 模拟阴影 -->
+		<view class="box-shadow"></view>
+	</view>
+</template>
+
+<script>
+	import apt from "@/mixins/applet-compatibility"
+	// import search from "@/components/search-bar/search-bar"
+	// 引入卡片容器
+	import card from "./components/card-container"
+	// import card from "@/components/card-template/card-template-1/card-template-1"
+	const dom = uni.requireNativePlugin("dom");
+	import storages from "@/utils/storage.js"
+	export default {
+		mixins: [apt],
+		components: {
+			card
+		},
+		data() {
+			return {
+				bottomRect: {},
+				touchstartY: 0,
+				isReady: false,
+				activeIndex: 0,
+				step: '',
+				cardList: [],
+				isAdd: false, //是否添加到负一屏
+			};
+		},
+		computed: {
+			pageStyle() {
+				return {
+					height: uni.$store.state.systemInfo.windowHeight + "px"
+				}
+			},
+		},
+		onReady() {
+			dom.getComponentRect(this.$refs.bottom, option => {
+				this.bottomRect = option.size
+			})
+		},
+		onLoad(option) {
+			// console.log("add-card-preview onload")
+			const eventChannel = this.getOpenerEventChannel();
+			// 监听acceptDataFromOpenerPage事件，获取上一页面通过eventChannel传送到当前页面的数据
+			eventChannel.on('acceptDataFromOpenerPage', (data) => {
+				this.cardList = data;
+				// console.log(data)
+			})
+		},
+		methods: {
+			navigator() {
+				uni.navigateBack({
+					delta: 1,
+					success: () => {},
+					fail: () => {
+
+					}
+				});
+			},
+			touchstart(event) {
+				this.touchstartY = event.touches[0].screenY;
+			},
+			touchmove(event) {
+				// this.touchendY = event.touches[0].screenY;
+			},
+			touchend(event) {
+				// console.log(event)
+				if (this.touchstartY < event.changedTouches[0].screenY) {
+					// 下滑
+					if (this.step == "slide_downward") {
+						// console.log('000')
+						this.activeIndex = this.activeIndex < this.cardList.length - 1 ? this.activeIndex + 1 : this
+							.activeIndex;
+					}
+					if(this.activeIndex<this.cardList.length-1){
+						this.step = "slide_downward"
+						console.log("下滑：" + this.activeIndex)
+						uni.$emit("addCardPreview", {
+							type: "slide_downward",
+							index: this.activeIndex
+						})
+						setTimeout(() => {
+							this.touchstartY = 0;
+							this.touchendY = 0;
+						}, 100);
+					}
+				} else {
+					// 上滑
+					if (this.step == "Upslide") {
+						this.activeIndex = this.activeIndex > 0 ? this.activeIndex - 1 : this.activeIndex;
+					}
+					this.step = "Upslide"
+					console.log("上滑：" + this.activeIndex)
+					uni.$emit("addCardPreview", {
+						type: "Upslide",
+						index: this.activeIndex
+					})
+					setTimeout(() => {
+						this.touchstartY = 0;
+						this.touchendY = 0;
+					}, 1000)
+				}
+			},
+			addCardToNegativeScreen() {
+				// 添加卡片到负一屏
+				if (!this.isAdd) {
+					let key = 0;
+					if (this.step == "slide_downward") {
+						key = this.activeIndex + 1;
+					} else {
+						key = this.activeIndex;
+					}
+					// 提取缓存中的数据
+					let val = storages.get("cardList");
+					// 缓存中的addCardList
+					let addCardList = storages.get("nativeCardList");
+					// 过滤非云端卡片数据
+					if(val!=null && addCardList!=null){
+						val = val.filter(e=>{
+							const index = addCardList.findIndex(v=>v.cardId==e.cardId)
+							if(index!=-1){
+								return true
+							}else{
+								return false
+							}
+						})
+					}
+					if (val == null) {
+						let list = [];
+						list.push(this.cardList[key])
+						// 保存到缓存中,保存10年
+						storages.set("cardList", list, 3650).then(res => {
+							uni.showToast({
+								icon: "success",
+								title: "添加成功"
+							})
+							this.isAdd = true;
+							uni.$emit("watchCardLongpress", {
+								type: "refresh"
+							})
+						}).catch(err => {
+							uni.showToast({
+								icon: "success",
+								title: "添加失败，请重新尝试"
+							})
+						})
+					} else {
+						// 重复校验
+						val=val.filter(v=>v!=null);
+						const v = val.findIndex(v=>v.cardId == this.cardList[key].cardId);
+						if (v == -1) {
+							// 没有重复
+							val.push(this.cardList[key]);
+							// 保存到缓存中,保存10年
+							storages.set("cardList", val, 3650).then(res => {
+								uni.showToast({
+									icon: "success",
+									title: "添加成功"
+								})
+								this.isAdd = true;
+								uni.$emit("watchCardLongpress", {
+									type: "refresh"
+								})
+							}).catch(err => {
+								uni.showToast({
+									icon: "success",
+									title: "添加失败，请重新尝试"
+								})
+								// this.isAdd = true;
+							})
+						} else {
+							// 有重复
+							uni.showToast({
+								icon: "success",
+								title: "添加成功"
+							})
+							this.isAdd = true;
+							uni.$emit("watchCardLongpress", {
+								type: "refresh"
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.page {
+		position: relative;
+		background-image: linear-gradient(to bottom, #000d20, #1a3a53);
+	}
+
+	.navbar {
+		flex-direction: row;
+		align-items: center;
+		margin-top: 40rpx;
+		margin-left: 40rpx;
+		& .title {
+			font-size: 36rpx;
+			margin-left: 40rpx;
+		}
+	}
+
+	.card-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+
+		& .more {
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+		}
+	}
+
+	.card-template-list {
+		margin-top: 100rpx;
+		height: 950rpx;
+		position: relative;
+		flex-wrap: wrap;
+		align-items: center;
+	}
+
+	.bottom {
+		position: fixed;
+		bottom: 0rpx;
+		width: 750rpx;
+		height: 250rpx;
+		align-items: center;
+		justify-content: center;
+
+		& .button-no {
+			width: 690rpx;
+			height: 80rpx;
+			border: 1px solid #fff;
+			border-radius: 40rpx;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+			background-color: rgba(255, 255, 255, 0.2);
+
+			& .title {
+				color: #fff;
+			}
+		}
+
+		& .button-yes {
+			width: 690rpx;
+			height: 80rpx;
+			border: 1px solid rgba(255, 255, 255, 0.2);
+			border-radius: 40rpx;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+			background-color: rgba(255, 255, 255, 0.2);
+
+			& .title {
+				color: rgba(255, 255, 255, 0.2);
+			}
+		}
+	}
+
+	.box-shadow {
+		// border: 1px solid red;
+		position: absolute;
+		width: 750rpx;
+		height: 200rpx;
+		background-image: linear-gradient(to bottom, rgba(23, 53, 77, 0.1), #17354d);
+		bottom: 248rpx;
+	}
+</style>

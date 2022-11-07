@@ -1,0 +1,123 @@
+<template>
+	<view class="box" @click="intoDetail">
+		<u--image
+			v-if="itemInfo.notifyType == 2"
+			:src="itemInfo.appLogoPic"
+			class="imageStyle"
+			width="120rpx"
+			height="120rpx"
+		/>
+		<u--image
+			v-if="itemInfo.notifyType == 1"
+			:src="itemInfo.appLogoPic"
+			class="imageStyle"
+			width="50rpx"
+			height="50rpx"
+		/>
+		<view v-if="itemInfo.notifyType == 2" class="top">
+			<u--text :text="itemInfo.appName" class="title" size="32" bold />
+			<u--text :text="itemInfo.pushTime" class="time" size="26" color="#666" />
+		</view>
+		<view v-if="itemInfo.notifyType == 1" class="top_system">
+			<u--text :text="itemInfo.appName" class="title" size="32" bold />
+			<u--text :text="itemInfo.pushTime" class="time" size="26" color="#666" />
+		</view>
+		<u--text v-if="itemInfo.notifyType == 2" :text="itemInfo.notifyProfile" class="content" lines="1" size="28" color="#666" />
+		<u--text v-if="itemInfo.notifyType == 1" :text="itemInfo.eventContent" class="content_system" lines="1" size="28" color="#666" />
+		<u--image
+			src="/static/information/arr.png"
+			class="arr"
+			width="20rpx"
+			height="40rpx"
+		/>
+	</view>
+</template>
+
+<script>
+	export default {
+		name:"information-item",
+		props:{
+			itemInfo:{
+				type: Object,
+				default: {
+					
+				}
+			}
+		},
+		data() {
+			return {
+				msg: 'success'
+			}
+		},
+		methods:{
+			// 进入到详情页面
+			intoDetail(){
+				setTimeout(()=> {
+					uni.$emit('information', {data: this.itemInfo})
+				}, 200)
+				uni.navigateTo({
+					url: "/pages/information-detail/information-detail"
+				})
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+.box{
+	position: relative;
+	width: 690rpx;
+	height: 180rpx;
+	margin: 15rpx 0;
+	border-radius: 30rpx;
+	background-color: #fff;
+	box-shadow: 1rpx 2rpx 2rpx rgba(0, 0, 0, .1);
+	
+	.imageStyle{
+		position: absolute;
+		top: 30rpx;
+		left: 30rpx;
+	}
+	.top{
+		position: absolute;
+		top: 30rpx;
+		left: 180rpx;
+		flex-direction: row;
+		
+		.title{
+			
+		}
+		.time{
+			padding: 0 0 0 30rpx;
+		}
+	}
+	.top_system{
+		position: absolute;
+		top: 36rpx;
+		left: 105rpx;
+		flex-direction: row;
+		
+		.time{
+			padding: 0 0 0 30rpx;
+		}
+	}
+	.content{
+		position: absolute;
+		width: 450rpx;
+		bottom: 30rpx;
+		left: 180rpx;
+	}
+	.content_system{
+		position: absolute;
+		width: 590rpx;
+		bottom: 30rpx;
+		left: 30rpx;
+	}
+	.arr{
+		position: absolute;
+		top: 50%;
+		right: 30rpx;
+		margin-top: -20rpx;
+	}
+}
+</style>

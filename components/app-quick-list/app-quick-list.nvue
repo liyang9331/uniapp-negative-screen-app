@@ -1,0 +1,119 @@
+<template>
+	<!-- 应用快捷入口 -->
+	<view class="app-quick-list-layout" :style="boxStyle">
+		<!-- 应用列表 -->
+		<view v-if="refresh" class="app-quick-list">
+			<view class="app-quick" v-for="(item,key) in appQuickList" :key="key"
+				@click="openApp(item.appPackage,item.url)">
+				<u--image shape="circle" :src="item.appLogoPic" width="100rpx" height="100rpx" @click="click">
+				</u--image>
+				<u--text :text="item.appName" align="center" :lines="item.appName.length > 5 ? 1 : false" mode="text"
+					size="24" color="#fff" :block="true" margin="10rpx 0 0 0"></u--text>
+			</view>
+		</view>
+		<!-- 标题 -->
+<!-- 		<u--text class="app-quick-list-title" :text="quickTitle" :size="titleStyle.size" :bold="titleStyle.bold"
+			:color="titleStyle.color" /> -->
+	</view>
+</template>
+
+<script>
+	import {
+		launchApplication
+	} from '@/utils/nativeAPI.js'
+	import storage from "@/utils/storage.js"
+	export default {
+		name: "app-quick-list",
+		props: {
+			// 外边框样式
+			boxStyle: {
+				type: Object,
+				default: {}
+			},
+			// 标题样式
+			titleStyle: {
+				type: Object,
+				default: {
+					size: 36,
+					bold: true,
+					color: '#fff'
+				}
+			},
+			// 标题名称
+			quickTitle: {
+				type: String,
+				default: '应用快捷入口'
+			},
+		},
+		data() {
+			return {
+				refresh: true,
+				appQuickList: [],
+				lastList: {
+					appLogoPic: "/static/application_image/addapp.png",
+					appName: "更多",
+					pname: "",
+					url: "/pages/application_activity/application_activity"
+				}
+			}
+		},
+		watch: {
+			'appQuickList[0].url'() {
+				this.refresh = false
+				setTimeout(() => {
+					this.refresh = true
+				}, 0)
+			}
+		},
+		methods: {
+			openApp(pname, url) {
+				if (pname) {
+					launchApplication(pname, {}, () => {})
+				} else {
+					uni.navigateTo({
+						url: url
+					})
+				}
+			},
+			// 获取本地应用快捷入口的数据
+			getQuickEntry() {
+				let arr = storage.get('quickEntry') || [];
+				// console.log('this.appQuickList',arr)
+				this.appQuickList = arr
+				this.appQuickList.push(this.lastList)
+				// console.log('this.appQuickList', this.appQuickList)
+			}
+		},
+		created() {
+			this.getQuickEntry()
+			uni.$on('watchAppQuickList', res => {
+				this.getQuickEntry()
+			})
+		},
+		beforeDestroy() {
+			uni.$off('watchAppQuickList')
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	// 应用快捷入口
+	.app-quick-list-layout {
+		padding: 20rpx;
+		// border: 1px solid red;
+		background-color: rgba(255, 255, 255, 0.3);
+		border-radius: 30rpx;
+		position: relative;
+
+		.app-quick-list {
+			display: flex;
+			flex-direction: row;
+			.app-quick {
+				width: 106rpx;
+				display: flex;
+				margin-right: 20rpx;
+				// border: 1px solid green;
+			}
+		}
+	}
+</style>

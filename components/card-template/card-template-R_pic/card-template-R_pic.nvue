@@ -1,0 +1,59 @@
+<template>
+	<view ref="card" class="card" :style="styles" @click="cardClickHandle">
+		<u--image 
+		@click.stop="iconHandle($event,{interface:card.urlSchemes})"
+		 radius="30rpx" :src="card.cardBgPic" :width="styles.width" :height="styles.height"></u--image>
+		 <view class="content_1">
+		 	<u--image shape="circle" :src="card.cardLogoPic" width="30rpx" height="30rpx"></u--image>
+		 	<u--text :lines="1" style="margin-left: 10rpx;" :bold="true" :text="card.cardName" size="26rpx" color="#000000">
+		 	</u--text>
+		 </view>
+	</view>
+</template>
+
+<script>
+	// 长方形图文卡片
+	import mixins from "../mixins.js"
+	export default {
+		name:"R_pic",
+		mixins: [mixins],
+		props: {
+			styles: {
+				type: [Object],
+				default: {
+					width: '330rpx',
+					height: '150rpx'
+				}
+			}
+		},
+		data() {
+			return {
+				rect: {},
+			}
+		},
+		computed: {},
+		watch: {},
+		created() {
+		},
+		mounted() {
+
+		},
+		methods: {
+			request(){}
+		},
+		beforeDestroy() {}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.card{
+		border-radius: 30rpx;
+	}
+	.content_1 {
+		position: absolute;
+		top: 10rpx;
+		left: 10rpx;
+		flex-direction: row;
+		align-items: center;
+	}
+</style>

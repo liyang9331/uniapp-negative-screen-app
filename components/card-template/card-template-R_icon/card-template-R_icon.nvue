@@ -1,0 +1,91 @@
+<template>
+	<div ref="card" class="card" :style="styles" @click="cardClickHandle">
+		<!-- 背景图 -->
+		<image style="position: absolute;top: 0;left: 0;border-radius: 20rpx;" v-if="card.cardBgPic!=''"
+			:src="card.cardBgPic" :style="styles" mode=""></image>
+		<div class="content_1">
+			<u--image shape="circle" :src="card.cardLogoPic" width="55rpx" height="55rpx"></u--image>
+			<u--text :lines="1" style="margin-left: 20rpx;" :bold="true" :text="card.cardName" size="32rpx"
+				color="#000000">
+			</u--text>
+		</div>
+		<div class="content_2">
+			<div class="list-item" v-for="(item,key) in card.list" :key="key" @click.stop="iconHandle($event,item)">
+				<u--image :src="item.icon" width="100rpx" height="100rpx"></u--image>
+				<u--text style="margin-top: 20rpx;" :text="item.title" size="30rpx" color="#000000"></u--text>
+			</div>
+		</div>
+	</div>
+</template>
+
+<script>
+	import mixins from "../mixins.js"
+	// 长方形图标卡片
+	export default {
+		name: "R_icon",
+		mixins: [mixins],
+		props: {
+			styles: {
+				type: [Object],
+				default: {
+					width: '690rpx',
+					height: '330rpx'
+				}
+			},
+		},
+		data() {
+			return {
+				rect: {},
+			}
+		},
+		computed: {},
+		watch: {},
+		created() {
+			// console.log(this.cardData)
+			// 组装数据
+			if (Object.keys(this.cardData).length > 0) {
+				// 组装数据
+				let list = [];
+				for (let a = 1; a <= 4; a++) {
+					const obj = {
+						icon: this.config.baseURL + this.cardData[`icon${a}Pic`],
+						title: this.cardData[`icon${a}Text`],
+						interface: this.cardData[`icon${a}Interface`]
+					}
+					list.push(obj)
+				}
+				this.card.list = list;
+			}
+		},
+		mounted() {},
+		methods: {
+			request() {}
+		},
+		beforeDestroy() {}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.card {
+		padding: 30rpx 30rpx 0rpx 30rpx;
+		background-color: #ffffff;
+		// position: relative;
+		border-radius: 30rpx;
+	}
+
+	.content_1 {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.content_2 {
+		margin-top: 55rpx;
+		flex-direction: row;
+		justify-content: space-around;
+
+		// border: 1px solid red;
+		& .list-item {
+			align-items: center;
+		}
+	}
+</style>

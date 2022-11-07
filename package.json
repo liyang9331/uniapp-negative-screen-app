@@ -1,0 +1,15 @@
+{
+    "id": "zhspglpt",
+    "name": "负一屏智慧助手",
+    "version": "1.0.0",
+    "description": "负一屏智慧助手",
+    "keywords": [
+        "负一屏智慧助手"
+    ],
+    "dependencies": {
+        "axios": "^0.27.2",
+        "blueimp-md5": "^2.19.0",
+        "dayjs": "^1.11.0",
+        "lodash.clonedeep": "^4.5.0"
+    }
+}

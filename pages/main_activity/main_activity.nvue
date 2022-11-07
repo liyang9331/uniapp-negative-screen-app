@@ -1,0 +1,551 @@
+<template>
+	<!-- 背景图片 -->
+	<image class="wallpaper" :src="getBackgroundImageUrl" :style="wallpaperStyle" />
+	<!-- 滚动区域 -->
+	<scroll-view show-scrollbar="false" @scroll="cardLayerScrollEventHandle" :scroll-y="!cardSlide" ref="page" class="content"
+		:style="pageStyle">
+		<view class="top-content" ref="topContent">
+			<view class="navbar" :style="{height:statusBarHeight+'px'}"></view>
+			<!-- 搜索 -->
+			<view class="search">
+				<!-- 模拟搜索输入框 -->
+				<view class="search-input" @click="navigator('search')">
+					<u--text text="搜索" size="28rpx" color="#ffffff"></u--text>
+				</view>
+				<!-- 加号 -->
+				<view class="search-plus" @click="navigator('add')">
+					<u-icon name="plus" color="#ffffff" size="36rpx" :blod="true"></u-icon>
+				</view>
+			</view>
+			<AppQuickList style="width: 690rpx;margin-left: 30rpx;margin-top:30rpx" android:name="应用快捷入口">
+			</AppQuickList>
+			<MessageList style="width: 690rpx;margin-left: 30rpx" android:name="消息聚合列表"></MessageList>
+		</view>
+		<!-- 填充层 -->
+		<view class="fill-layer" v-if="isFillLayerShow" :style="{height:fillLayerHeight+'px'}"></view>
+		<!-- 服务卡片 -->
+		<CardDrag v-for="(item) in cardList" :cardData="item" :key="item.cardId" :rectList="rectList"
+			:maskShow="maskShow" :pageHeight="pageHeight" :id="item.cardId" :activeCardId="activeCardId"
+			:scrollTop="scrollTop">
+		</CardDrag>
+		<!-- 底部占位 -->
+		<view class="bottom-occupy" :style="bottomOccupyStyle" ref="bottomOccupy"></view>
+		<!-- 遮罩层 -->
+		<view ref="maskLayer" class="mask-layer" v-if="maskShow" @touchstart="tapMask" :style="maskStyle"></view>
+	</scroll-view>
+	</view>
+</template>
+
+<script>
+	import apt from "@/mixins/applet-compatibility.js"
+	import AppQuickList from "@/components/app-quick-list/app-quick-list"
+	import MessageList from "@/components/message-list/message-list"
+	import CardDrag from "@/components/card-drag/card-drag"
+	const dom = uni.requireNativePlugin('dom')
+	import storages from "@/utils/storage.js"
+	import {
+		getCardList
+	} from "@/api/card.js"
+	var settimeout = null;
+	import cloneDeep from "lodash.clonedeep"
+	import netchange from "@/utils/netchange.js"
+	export default {
+		mixins: [apt],
+		components: {
+			AppQuickList,
+			MessageList,
+			CardDrag
+		},
+		data() {
+			return {
+				cardList: [],
+				rectList: [], //卡片模型rect数组
+				topCardShow: false, //卡片拷贝是否显示
+				cardSlide: false, //卡片模型是否处于滑动中
+				topCardX: 0,
+				topCardY: 0,
+				pageHeight: 0, //页面的高度
+				maskShow: false, //
+				cardOperationShow: false,
+				cardListHeight: 0,
+				cardListTop: 0,
+				cardListLeft: 0,
+				activeCardId: "", //激活的卡片id
+				bgImgUrl: "", //背景图片【高斯模糊后】
+				isReady: true, //数据就绪，等待渲染
+				// isScrollY:true,//是否运行卡片区域纵向滚动
+				topHeight: 0,
+				maskTop: 0,
+				topContentHeight: 0, //卡片顶部区域高度
+				fillLayerHeight: 0, //填充层高度
+				cardLayerHeight: 0, //卡片区域高度
+				scrollTop: 0, //卡片区域滚动高度
+				bottomOccupyTop:0,//底部占位高度
+			}
+		},
+		computed: {
+			bottomOccupyStyle(){
+				if(this.pageHeight > 0){
+					return {
+						position:"absolute",
+						left:'0px',
+						top:this.bottomOccupyTop+'px'
+					}
+				}else{
+					return {}
+				}
+
+			},
+			isFillLayerShow() {
+				const list = this.rectList;
+				if (list.length > 0) {
+					// 计算卡片区域的高度
+					let h = 0;
+					list.forEach((item, key) => {
+						// 检查当前卡片有没有同级
+						const i = list.filter((v,index)=>{return index>key})
+						.findIndex(v=>v.rect.top == item.rect.top);
+						if(i!=-1){
+							// 有同级
+							if(list[i].rect.height>item.rect.height){
+								h+=list[i].rect.height
+							}else{
+								h+=item.rect.height
+							}
+						}else if(item.rect.left<20){
+							// 没有同级
+							h+=item.rect.height
+						}
+					})
+					let height = uni.$store.state.systemInfo.windowHeight - this.topContentHeight;
+					if (h < height) {
+						this.fillLayerHeight = height
+						// console.log(this.fillLayerHeight)
+						return true
+					} else {
+						// console.log(this.fillLayerHeight)
+						return false
+					}
+				}else{
+					// console.log(this.fillLayerHeight)
+					return false
+				}
+			},
+			// 遮罩层样式
+			maskStyle() {
+				// uni.log(this.rectList.find(item => this.activeCardId == item.id))
+				if (this.pageHeight != 0) {
+					return {
+						top: this.maskTop + "px",
+						left: "0px",
+						height: this.pageHeight + 'px'
+					}
+				} else {
+					return {
+						top: this.maskTop + "px",
+						left: "0px",
+						height: uni.$store.state.systemInfo.windowHeight + 'px'
+					}
+				}
+			},
+			// 主窗口动态样式
+			pageStyle() {
+				let style = {
+					height: 0,
+				};
+				if (this.pageHeight != 0) {
+					style.height = this.pageHeight + 'px'
+				} else {
+					style.height = uni.$store.state.systemInfo.windowHeight + 'px'
+				}
+				return style
+			},
+			wallpaperStyle() {
+				return {
+					height: uni.$store.state.systemInfo.windowHeight + 'px'
+				}
+			},
+			getBackgroundImageUrl() {
+				return uni.$store.state.backgroundImageUrl
+			},
+		},
+		watch: {
+			maskShow(val, oldVal) {
+				if (val == true) {
+					setTimeout(() => {
+						dom.getComponentRect(this.$refs.maskLayer, option => {
+							// uni.log(option)
+							if (option.size.bottom < option.size.height) {
+								this.maskTop = option.size.height - option.size.bottom
+							} else {
+								this.maskTop = 0;
+							}
+							// uni.log(this.maskTop)
+						})
+					}, 15)
+				} else {
+					this.maskTop = 0;
+				}
+			}
+		},
+		onLoad() {
+			uni.log("main activity Load")
+			// 注册全局事件
+			this.createdEventGlobal()
+			// 请求卡片列表数据
+			this.requestData().then(res => {
+				dom.getComponentRect(this.$refs.topContent, option => {
+					this.topContentHeight = option.size.height;
+					setTimeout(() => {
+						this.initComponentRect()
+					}, 30)
+				})
+			}).catch(err => {
+			})
+		},
+		onReady() {
+			uni.log("main activity Ready")
+		},
+		onResize() {
+			uni.log("main activity Resize")
+			// 页面尺寸改变
+		},
+		onUnload() {
+			// 页面卸载
+			uni.$off("watchCardLongpress");
+		},
+		methods: {
+			cardLayerScrollEventHandle(event) {
+				// console.log(event)
+				this.scrollTop = event.detail.scrollTop
+			},
+			requestData() {
+				return new Promise((resolve, reject) => {
+					if(netchange()===false){
+						// 弱网环境，使用本地缓存数据
+						console.log("弱网环境，使用本地缓存数据")
+						let cardList = storages.get("cardList");
+						if (cardList != null) {
+							this.cardList = cardList;
+						} else {
+							this.cardList = [];
+						}
+					}else{
+						getCardList({
+							status: 2,
+							page: 1,
+							pageSize: 1000
+						}).then(res => {
+							// this.nativeCardList = res.data.rows;
+							// 根据云端已上架卡片数据过滤本地缓存卡片数据
+							let cardList = storages.get("cardList");
+							cardList = cardList.filter(v => v != null);
+							if (cardList != null) {
+								if(res.data.rows.length == 0){
+									this.cardList = cardList.filter(element => res.data.rows.findIndex(v => v
+										.cardId == element
+										.cardId) != -1)
+								}else{
+									this.cardList = cardList.filter(element => res.data.rows.findIndex(v => v
+										.cardId == element
+										.cardId) != -1)
+								}
+							} else {
+								this.cardList = [];
+							}
+							resolve()
+						}).catch(err => {
+							reject()
+						})
+					}
+					
+				})
+			},
+			getStoragesCardList() {
+				// 获取本地存储的cardList
+				let list = storages.get("cardList");
+				this.cardList = list == null ? [] : list;
+			},
+			initComponentRect() {
+				// 获取初始化渲染时页面的高度
+				dom.getComponentRect(this.$refs.page, res => {
+					dom.getComponentRect(this.$refs.bottomOccupy,option=>{
+						this.bottomOccupyTop = option.size.top;
+						this.pageHeight = res.size.height;
+					})
+				})
+			},
+			navigator(key) {
+				if (key == "add") {
+					uni.navigateTo({
+						url: '/pages/add-card/add-card',
+						success: (res) => {
+							this.isReady = false
+						},
+						fail: (err) => {
+							uni.log(err)
+						}
+					})
+				} else if (key == "search") {
+					uni.navigateTo({
+						url: '/pages/search_activity/search_activity',
+						success: (res) => {
+							// this.isReady = false
+						},
+						fail: (err) => {
+							uni.log(err)
+						}
+					})
+				}
+			},
+			// 触摸遮罩层
+			tapMask() {
+				uni.log("tap mask")
+				this.maskShow = false;
+				uni.$emit("watchCardAndParentCommunication", {
+					type: "resetElevation",
+					id: this.activeCardId
+				})
+			},
+			// 更新卡片列表
+			updateCardList() {
+				// 移除页面内的卡片
+				this.cardList = [];
+				this.rectList = [];
+				this.pageHeight = 0;
+				this.$nextTick(()=>{
+					this.getStoragesCardList();
+					setTimeout(()=>{
+						this.initComponentRect();
+					},100)
+				})
+			},
+			// 重新定位
+			reposition(time) {
+				// 创建延时函数
+				if (settimeout == null) {
+					settimeout = setTimeout(() => {
+						// 重新排序 top越大越靠后，相同top值情况下，对比left，left越小，越靠前
+						let list = this.rectList.sort((a, b) => {
+							return a.rect.top - b.rect.top
+						});
+						let exchangeOrderList = [];
+						list.forEach((item, key) => {
+							// 同行卡片
+							if (key < list.length - 1) {
+								// uni.log(item,list[key+1])
+								if (item.rect.top == list[key + 1].rect.top && item
+									.rect.left > list[
+										key + 1].rect.left) {
+									// 调换顺序
+									exchangeOrderList.push({
+										from: key,
+										to: key + 1
+									})
+								}
+							}
+						})
+						exchangeOrderList.forEach((item, key) => {
+							// 提取待替换的数据
+							const from = list[item.from];
+							const to = list[item.to];
+							// 替换数据
+							list[item.from] = to;
+							list[item.to] = from;
+						})
+						this.rectList = list;
+						settimeout = null;
+						// 同步到本地数据缓存数据
+						let arr = [];
+						list.forEach((item, key) => {
+							arr.push(this.cardList.find(element => element.cardId ==
+								item.id))
+						})
+						// 写入缓存
+						storages.set("cardList", arr, 3650).then(res => {
+							uni.log(res)
+						}).catch(err => {
+							uni.log(err)
+						})
+					}, time)
+				}
+			},
+			// 创建全局自定义事件
+			createdEventGlobal() {
+				// 主窗口和卡片模型通信
+				uni.$on("watchCardLongpress", (res) => {
+					// uni.log(res.type)
+					switch (res.type) {
+						case "release_slide_limit":
+							this.cardSlide = res.cardSlide;
+							this.activeCardId = res.cardId;;
+							break;
+						case "card_longpress":
+							this.cardSlide = res.cardSlide;
+							this.maskShow = res.maskShow;
+							this.activeCardId = res.cardId;
+							break;
+						case "card_start_touchmove":
+							this.maskShow = res.maskShow;
+							this.activeCardId = res.cardId;
+							break;
+						case "synchronization_rect_init":
+							this.isScrollY = false
+							let flag = false
+							this.rectList.forEach((item, key) => {
+								if (item.id == res.cardId) {
+									flag = true
+								}
+							})
+							if (flag) {
+								this.rectList = this.rectList.map((item, key) => {
+									if (item.id == res.cardId) {
+										item.rect = res.rect
+									}
+									return item
+								})
+							} else {
+								this.rectList.push({
+									id: res.cardId,
+									rect: res.rect
+								})
+							}
+							break;
+						case "synchronization_rect":
+							this.isScrollY = false
+							this.rectList.forEach((item, key) => {
+								if (item.id == res.cardId) {
+									flag = true
+								}
+							})
+							if (flag) {
+								this.rectList = this.rectList.map((item, key) => {
+									if (item.id == res.cardId) {
+										item.rect = res.rect
+									}
+									return item
+								})
+							} else {
+								this.rectList.push({
+									id: res.cardId,
+									rect: res.rect
+								})
+							}
+							this.reposition(500)
+							break;
+						case "card_remove":
+							this.maskShow = false;
+							this.cardSlide = false;
+							let list = cloneDeep(this.cardList)
+							list = list.filter(v => v.cardId != res.cardId);
+							storages.set("cardList", list, 3650).then(res=>{
+								this.updateCardList();
+							})
+							break;
+						case "refresh":
+							// 更新卡片列表
+							this.updateCardList()
+							break;
+					}
+				})
+			}
+		}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.navbar {
+		// background-color: red;
+		width: 750rpx;
+	}
+	.bottom-occupy{
+		width: 750rpx;
+		height: 60rpx;
+		// border: 1px solid red;
+	}
+	.fill-layer {
+		width: 750rpx;
+	}
+
+	.top-content {
+		width: 750rpx;
+		height: 546rpx;
+		// position: absolute;
+		// border: 1px solid red;
+	}
+
+	.testing {
+		position: fixed;
+		width: 30rpx;
+		height: 30rpx;
+		background-color: green;
+		top: 417px;
+		left: 204px;
+	}
+
+	.wallpaper {
+		position: fixed;
+		width: 750rpx;
+	}
+
+	.content {
+		width: 750rpx;
+		position: fixed;
+		display: flex;
+		flex-direction: row;
+		flex-wrap: wrap;
+		// border: 1px solid red;
+	}
+
+	.mask-layer {
+		width: 750rpx;
+		height: 100%;
+		background-color: rgba(0, 0, 0, 0.5);
+		position: absolute;
+	}
+
+
+	.header {
+		width: 690rpx;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.search {
+		width: 690rpx;
+		display: flex;
+		flex-direction: row;
+		margin-left: 30rpx;
+		margin-top: 30rpx;
+		& .search-input {
+			width: 590rpx;
+			height: 80rpx;
+			padding: 0 0 0 30rpx;
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			border-radius: 40rpx;
+			background-color: rgba(255, 255, 255, 0.4);
+		}
+
+		& .search-plus {
+			margin-left: 10rpx;
+			width: 80rpx;
+			height: 80rpx;
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+			background-color: rgba(255, 255, 255, 0.4);
+			border-radius: 40rpx;
+		}
+	}
+
+	.nav-list {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+	}
+</style>

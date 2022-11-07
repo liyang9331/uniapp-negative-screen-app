@@ -1,0 +1,82 @@
+<template>
+	<view ref="card" class="card" :style="styles" @click="cardClickHandle">
+		<u--image radius="20rpx" :src="card.cardBgPic" :width="styles.width" :height="styles.height"
+			@click.stop="iconHandle($event,{interface:card.urlSchemes})"></u--image>
+		<view class="bottom" :style="{width:styles.width,height:styles.height}"
+			@click.stop="iconHandle($event,{interface:card.urlSchemes})">
+			<view class="container" :style="{width:styles.width}">
+				<u--text lines="1" style="margin-top: 10rpx;" :text="card.cardTitle" size="30rpx" color="#fff">
+				</u--text>
+				<u--text lines="1" style="margin-top: 10rpx;" :text="card.cardSubTitle" size="24rpx" color="#DCDCDC">
+				</u--text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+	// 方形图文卡片
+	import mixins from "../mixins.js"
+	export default {
+		name: "S_pic",
+		mixins: [mixins],
+		props: {
+			styles: {
+				type: [Object],
+				default: {
+					width: '330rpx',
+					height: '330rpx'
+				}
+			}
+		},
+		data() {
+			return {
+				rect: {},
+			}
+		},
+		computed: {},
+		watch: {},
+		created() {
+			this.card.cardThumbPic = this.insertDomainName("cardThumbPic");
+			this.card.cardBgPic = this.insertDomainName("cardBgPic");
+			// console.log(this.card);
+		},
+		mounted() {
+
+		},
+		methods: {
+			request() {}
+		},
+		beforeDestroy() {}
+	}
+</script>
+
+<style lang="scss" scoped>
+	.content_1 {
+		position: absolute;
+		left: 30rpx;
+		top: 20rpx;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.card {
+		position: relative;
+		border-radius: 30rpx;
+	}
+
+	.bottom {
+		position: absolute;
+		top: 0;
+		left: 0;
+		border-radius: 20rpx;
+		background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(0, 0, 0, 0.9));
+
+		& .container {
+			position: absolute;
+			bottom: 0;
+			padding-left: 30rpx;
+			padding-bottom: 10rpx;
+		}
+	}
+</style>
